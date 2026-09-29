@@ -30,6 +30,46 @@
 
   /* Motion */
   --ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
+  --animate-marquee: marquee 70s linear infinite;
+  --animate-spin-slow: seal-spin 48s linear infinite;
+  --animate-menu-in: menu-in 700ms var(--ease-calm) both;
+  --animate-fade-in: fade-in 500ms var(--ease-calm) both;
+  --animate-rise: rise 1.1s var(--ease-calm) both;
+
+  @keyframes rise {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 1.1rem, 0);
+    }
+  }
+
+  @keyframes menu-in {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 0.9rem, 0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translate3d(0, 0, 0);
+    }
+    to {
+      transform: translate3d(-50%, 0, 0);
+    }
+  }
+
+  @keyframes seal-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 }
 
 /* Fonts come from next/font variables set on <html> (see layout.tsx). */
@@ -51,6 +91,8 @@
     font-family: var(--font-sans);
     font-size: 1rem;
     line-height: 1.65;
+    /* Cormorant defaults to old-style figures ("1st" reads as "ist"); the logo uses lining. */
+    font-variant-numeric: lining-nums;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
@@ -101,6 +143,51 @@
   text-transform: uppercase;
 }
 
+/* Large editorial headline sizes */
+@utility text-display-xl {
+  font-size: clamp(3.1rem, 7.2vw, 6.6rem);
+  line-height: 0.98;
+  letter-spacing: -0.02em;
+}
+@utility text-display-lg {
+  font-size: clamp(2.5rem, 5vw, 4.4rem);
+  line-height: 1.02;
+  letter-spacing: -0.015em;
+}
+@utility text-display-md {
+  font-size: clamp(2rem, 3.4vw, 3rem);
+  line-height: 1.06;
+}
+
+/* Hide scrollbars on horizontal carousels (still scrollable) */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Scroll reveal. Only hidden when JS is running, so content never disappears without it. */
+.js [data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, 1.1rem, 0);
+  transition:
+    opacity 1s var(--ease-calm),
+    transform 1s var(--ease-calm);
+}
+.js [data-reveal][data-visible] {
+  opacity: 1;
+  transform: none;
+}
+
+/* Native <details> accordions: hide the default marker */
+summary {
+  list-style: none;
+}
+summary::-webkit-details-marker {
+  display: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -109,5 +196,9 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+  .js [data-reveal] {
+    opacity: 1;
+    transform: none;
   }
 }

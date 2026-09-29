@@ -1,47 +1,41 @@
-import Image from "next/image";
-import logo from "@/assets/brand/matcha9-logo.webp";
+import { CommunitySection } from "@/components/home/CommunitySection";
+import { Hero } from "@/components/home/Hero";
+import { InstagramStrip } from "@/components/home/InstagramStrip";
+import { MenuPreview } from "@/components/home/MenuPreview";
+import { RitualSection } from "@/components/home/RitualSection";
+import { ShopTeaser } from "@/components/home/ShopTeaser";
+import { StandardSection } from "@/components/home/StandardSection";
+import { StoryTeaser } from "@/components/home/StoryTeaser";
+import { VisitSection } from "@/components/home/VisitSection";
+import { WellnessBlends } from "@/components/home/WellnessBlends";
+import { LocalBusinessJsonLd } from "@/components/seo/LocalBusinessJsonLd";
+import { Marquee } from "@/components/ui/Marquee";
 import { site } from "@/lib/site";
 
-// Setup placeholder. Replaced by the full homepage during development.
 export default function Home() {
-  const { address } = site;
-
   return (
-    <main className="flex min-h-svh flex-col">
-      <section className="container-page flex flex-1 flex-col items-center justify-center py-20 text-center">
-        <Image src={logo} alt={site.name} loading="eager" className="h-auto w-40 sm:w-48" />
-
-        <p className="mt-12 eyebrow text-sage-deep">
-          {address.neighborhood} · {address.city}
-        </p>
-
-        <h1 className="mt-5 text-5xl sm:text-6xl md:text-7xl">
-          Wellness drinks,
-          <br />
-          <em className="text-sage-deep">made beautiful.</em>
-        </h1>
-
-        <p className="mt-6 font-script text-3xl text-terracotta-deep sm:text-4xl">{site.motto}</p>
-
-        <p className="mt-10 max-w-md text-ink-soft">
-          Our new website is being whisked to order. Until then, find us at the matcha counter
-          inside Taco Maya.
-        </p>
-      </section>
-
-      <footer className="container-page flex flex-col items-center gap-3 border-t border-line py-8 text-sm text-ink-soft sm:flex-row sm:justify-between">
-        <span>
-          {address.street}, {address.city}, {address.region} {address.postalCode}
-        </span>
-        <span className="flex gap-6">
-          <a href={site.phone.href} className="transition-colors hover:text-moss">
-            {site.phone.display}
-          </a>
-          <a href={site.instagram.href} className="transition-colors hover:text-moss">
-            {site.instagram.handle}
-          </a>
-        </span>
-      </footer>
-    </main>
+    <>
+      <LocalBusinessJsonLd />
+      <Hero />
+      <Marquee
+        items={[
+          site.motto,
+          "Certified organic",
+          "Ceremonial grade",
+          "Whisked to order",
+          site.values.join(" · "),
+          "Logan Square, Chicago",
+        ]}
+      />
+      <StandardSection />
+      <MenuPreview />
+      <WellnessBlends />
+      <RitualSection />
+      <StoryTeaser />
+      <CommunitySection />
+      <VisitSection />
+      <ShopTeaser />
+      <InstagramStrip />
+    </>
   );
 }
