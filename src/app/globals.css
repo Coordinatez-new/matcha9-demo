@@ -1,0 +1,113 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Matcha 9 design tokens
+   Palette sampled from the real logo (ensō brush, moss wordmark,
+   terracotta tile) and the brand's print and social graphics.
+   ------------------------------------------------------------------ */
+@theme {
+  /* Surfaces */
+  --color-cream: #f5f0ea; /* page background (logo cream) */
+  --color-paper: #faf7f2; /* raised cards */
+  --color-sand: #ece4d8; /* tinted bands */
+  --color-line: #ddd3c5; /* hairlines and borders */
+
+  /* Ink */
+  --color-ink: #262c23; /* body text */
+  --color-ink-soft: #5b6154; /* secondary text (AA on cream) */
+  --color-moss: #3e4838; /* logo wordmark, headings */
+  --color-forest: #1f271d; /* dark sections */
+
+  /* Greens */
+  --color-sage: #8e927c; /* logo brush (decorative) */
+  --color-sage-deep: #656e59;
+  --color-olive: #71855a;
+  --color-matcha: #7d9a4e; /* vivid accent, used sparingly */
+
+  /* Warm accent */
+  --color-terracotta: #c9876e; /* logo tile (decorative) */
+  --color-terracotta-deep: #a9654d;
+
+  /* Motion */
+  --ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Fonts come from next/font variables set on <html> (see layout.tsx). */
+@theme inline {
+  --font-display: var(--font-cormorant), "Cormorant Garamond", Garamond, "Times New Roman", serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-script: var(--font-pinyon), "Snell Roundhand", cursive;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+
+  body {
+    background-color: var(--color-cream);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 500;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    color: var(--color-moss);
+    text-wrap: balance;
+  }
+
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--color-matcha) 28%, transparent);
+    color: var(--color-ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-moss);
+    outline-offset: 3px;
+    border-radius: 2px;
+  }
+}
+
+/* Page width + gutters used by every section */
+@utility container-page {
+  width: 100%;
+  max-width: 84rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 3rem);
+}
+
+/* Small uppercase label above headings */
+@utility eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
