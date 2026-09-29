@@ -12,7 +12,7 @@ export function LocalBusinessJsonLd() {
     telephone: "+1-872-299-8880",
     priceRange: "$",
     servesCuisine: ["Matcha", "Tea"],
-    hasMenu: `${site.url.replace(/\/$/, "")}/menu/`,
+    hasMenu: `${site.url.replace(/\/$/, "")}/menu`,
     address: {
       "@type": "PostalAddress",
       streetAddress: site.address.street,

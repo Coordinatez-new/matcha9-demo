@@ -88,7 +88,7 @@ export function RitualSection() {
           </ol>
 
           <Reveal>
-            <ArrowLink href="/matcha/" className="mt-10 text-moss">
+            <ArrowLink href="/matcha" className="mt-10 text-moss">
               The part most places don’t explain
             </ArrowLink>
           </Reveal>

@@ -52,7 +52,7 @@ export function StoryTeaser() {
               <p className="font-script text-5xl leading-none text-terracotta">{founder.name}</p>
               <p className="mt-3 eyebrow text-cream/50">{founder.role}, Matcha 9</p>
             </div>
-            <ButtonLink href="/story/" variant="outline-light">
+            <ButtonLink href="/story" variant="outline-light">
               Read the full story
             </ButtonLink>
           </Reveal>

@@ -1,4 +1,4 @@
-import { site } from "@/lib/site";
+import { OrderPickupButton } from "@/components/order/OrderPickupButton";
 import { ButtonLink } from "./Button";
 import { Reveal } from "./Reveal";
 
@@ -13,14 +13,13 @@ export function OrderBand() {
               Skip the wait. <em>Your matcha, whisked and ready.</em>
             </h2>
             <p className="mt-5 leading-relaxed text-cream/70">
-              Pickup from the matcha counter inside Taco Maya, Logan Square. {site.rewards}
+              Order here, then pick it up from the matcha counter inside Taco Maya, Logan Square.
+              We’ll have it whisked and waiting.
             </p>
           </div>
           <div className="flex flex-wrap gap-3">
-            <ButtonLink href={site.orderUrl} external variant="light">
-              Order pickup
-            </ButtonLink>
-            <ButtonLink href="/visit/" variant="outline-light">
+            <OrderPickupButton variant="light" />
+            <ButtonLink href="/visit" variant="outline-light">
               Find us
             </ButtonLink>
           </div>

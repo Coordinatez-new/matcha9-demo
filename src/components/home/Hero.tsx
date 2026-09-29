@@ -1,6 +1,7 @@
 import Image from "next/image";
 import hero from "@/assets/place/hero-plant-wall.webp";
 import { site } from "@/lib/site";
+import { OrderPickupButton } from "@/components/order/OrderPickupButton";
 import { ButtonLink } from "@/components/ui/Button";
 import { Seal } from "@/components/ui/Seal";
 
@@ -31,13 +32,12 @@ export function Hero() {
             </h1>
             <p className="mt-8 max-w-xl text-lg leading-relaxed text-ink-soft md:text-xl">
               A matcha bar built around one ingredient done right: certified organic,
-              ceremonial-grade Japanese matcha, whisked to order into nine signature drinks.
+              ceremonial-grade Japanese matcha, whisked to order. Order ahead and pick it up at the
+              counter.
             </p>
             <div className="mt-10 flex flex-wrap gap-3">
-              <ButtonLink href="/menu/">Explore the menu</ButtonLink>
-              <ButtonLink href={site.orderUrl} external variant="outline">
-                Order pickup
-              </ButtonLink>
+              <ButtonLink href="/menu">Explore the menu</ButtonLink>
+              <OrderPickupButton variant="outline" />
             </div>
           </div>
 

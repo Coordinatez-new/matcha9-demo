@@ -7,16 +7,89 @@ import { useEffect, useState } from "react";
 import logo from "@/assets/brand/matcha9-logo.webp";
 import { cn } from "@/lib/cn";
 import { fullAddress, nav, site } from "@/lib/site";
-import { ButtonLink } from "@/components/ui/Button";
-import { CloseIcon, InstagramIcon, MenuIcon } from "@/components/ui/icons";
+import { buttonClasses } from "@/components/ui/Button";
+import { ArrowUpRight, BagIcon, CloseIcon, InstagramIcon, MenuIcon } from "@/components/ui/icons";
+import { useBag } from "@/components/order/BagProvider";
 
 function isActive(pathname: string, href: string) {
-  const clean = (p: string) => (p.endsWith("/") ? p : `${p}/`);
-  return clean(pathname).startsWith(clean(href));
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** "Order pickup": opens the bag, or goes to Toast when ordering is handed over to it. */
+function OrderButton({ compact, onOpen }: { compact?: boolean; onOpen?: () => void }) {
+  const { storefront, count, openBag } = useBag();
+
+  if (storefront.mode === "toast") {
+    return (
+      <a
+        href={storefront.toastUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={buttonClasses("primary", "sm", compact ? "w-full" : undefined)}
+      >
+        Order pickup <ArrowUpRight className="size-3.5" />
+      </a>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        onOpen?.();
+        openBag();
+      }}
+      aria-label={count > 0 ? `Order pickup, ${count} in your bag` : "Order pickup"}
+      className={buttonClasses("primary", "sm", compact ? "w-full" : undefined)}
+    >
+      Order pickup
+      {count > 0 && (
+        <span className="-mr-2 grid h-5 min-w-5 place-items-center rounded-full bg-cream px-1.5 text-[0.65rem] tracking-normal text-moss tabular-nums">
+          {count}
+        </span>
+      )}
+    </button>
+  );
+}
+
+/** Small bag button for phones, where the full "Order pickup" pill doesn't fit. */
+function BagButton() {
+  const { storefront, count, openBag } = useBag();
+  const classes =
+    "relative grid size-11 place-items-center rounded-full bg-moss text-cream transition-colors hover:bg-forest";
+  if (storefront.mode === "toast") {
+    return (
+      <a
+        href={storefront.toastUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Order pickup on Toast"
+        className={classes}
+      >
+        <BagIcon className="size-5" />
+      </a>
+    );
+  }
+  return (
+    <button
+      type="button"
+      onClick={openBag}
+      aria-label={count > 0 ? `Your bag, ${count} items` : "Order pickup"}
+      className={classes}
+    >
+      <BagIcon className="size-5" />
+      {count > 0 && (
+        <span className="absolute -top-1 -right-1 grid h-5 min-w-5 place-items-center rounded-full border-2 border-cream bg-terracotta-deep px-1 text-[0.6rem] font-semibold text-cream tabular-nums">
+          {count}
+        </span>
+      )}
+    </button>
+  );
 }
 
 export function SiteHeader() {
   const pathname = usePathname();
+  const { storefront } = useBag();
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -65,8 +138,8 @@ export function SiteHeader() {
             </span>
           </Link>
 
-          <nav aria-label="Main" className="ml-auto hidden xl:block">
-            <ul className="flex items-center gap-9">
+          <nav aria-label="Main" className="ml-auto hidden md:block">
+            <ul className="flex items-center gap-10">
               {nav.map((item) => {
                 const active = isActive(pathname, item.href);
                 return (
@@ -90,11 +163,12 @@ export function SiteHeader() {
             </ul>
           </nav>
 
-          <div className="ml-auto flex items-center gap-3 xl:ml-2">
+          <div className="ml-auto flex items-center gap-3 md:ml-2">
             <div className="hidden sm:block">
-              <ButtonLink href={site.orderUrl} external size="sm">
-                Order pickup
-              </ButtonLink>
+              <OrderButton />
+            </div>
+            <div className="sm:hidden">
+              <BagButton />
             </div>
             <button
               type="button"
@@ -102,7 +176,7 @@ export function SiteHeader() {
               aria-expanded={open}
               aria-controls="mobile-menu"
               aria-label={open ? "Close menu" : "Open menu"}
-              className="grid size-11 place-items-center rounded-full border border-moss/20 text-moss transition-colors hover:bg-moss hover:text-cream xl:hidden"
+              className="grid size-11 place-items-center rounded-full border border-moss/20 text-moss transition-colors hover:bg-moss hover:text-cream md:hidden"
             >
               {open ? <CloseIcon className="size-5" /> : <MenuIcon className="size-5" />}
             </button>
@@ -115,7 +189,7 @@ export function SiteHeader() {
       {open && (
         <div
           id="mobile-menu"
-          className="fixed inset-x-0 top-20 bottom-0 z-40 flex animate-fade-in flex-col overflow-y-auto bg-cream xl:hidden"
+          className="fixed inset-x-0 top-20 bottom-0 z-40 flex animate-fade-in flex-col overflow-y-auto bg-cream md:hidden"
         >
           <nav aria-label="Main" className="container-page pt-8">
             <ul className="divide-y divide-line border-y border-line">
@@ -137,13 +211,11 @@ export function SiteHeader() {
             </ul>
           </nav>
           <div className="container-page mt-auto space-y-6 py-10">
-            <ButtonLink href={site.orderUrl} external className="w-full">
-              Order pickup
-            </ButtonLink>
+            <OrderButton compact onOpen={() => setOpen(false)} />
             <div className="text-sm leading-relaxed text-ink-soft">
               <p>{fullAddress}</p>
               <p>
-                {site.address.venue} · {site.hours.label}, {site.hours.time}
+                {site.address.venue} · {storefront.hours}
               </p>
             </div>
             <a

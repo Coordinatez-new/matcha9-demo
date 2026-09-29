@@ -23,6 +23,17 @@ const variants: Record<Variant, string> = {
     "border border-cream/30 text-cream hover:border-cream hover:bg-cream hover:text-forest",
 };
 
+/** The same pill styles, for `<button>` elements and other custom triggers. */
+export function buttonClasses(variant: Variant = "primary", size: Size = "md", className?: string) {
+  return cn(
+    base,
+    sizes[size],
+    variants[variant],
+    "disabled:pointer-events-none disabled:opacity-45",
+    className,
+  );
+}
+
 type ButtonLinkProps = {
   href: string;
   children: ReactNode;

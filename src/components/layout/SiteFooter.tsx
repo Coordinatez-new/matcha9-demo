@@ -1,10 +1,12 @@
 import Image from "next/image";
 import Link from "next/link";
 import logoCream from "@/assets/brand/matcha9-logo-cream.webp";
-import { fullAddress, nav, site } from "@/lib/site";
+import { footerNav, fullAddress, site } from "@/lib/site";
 import { ArrowUpRight, InstagramIcon } from "@/components/ui/icons";
 
-export function SiteFooter() {
+type SiteFooterProps = { hours: string; orderHref: string; orderExternal: boolean };
+
+export function SiteFooter({ hours, orderHref, orderExternal }: SiteFooterProps) {
   const year = 2026;
   return (
     <footer className="relative overflow-hidden bg-forest text-cream">
@@ -14,8 +16,8 @@ export function SiteFooter() {
             <Image src={logoCream} alt={site.name} className="h-auto w-28" />
             <p className="mt-8 font-script text-4xl text-terracotta">{site.motto}</p>
             <p className="mt-5 max-w-sm leading-relaxed text-cream/65">
-              Certified organic, ceremonial-grade Japanese matcha, whisked to order into nine
-              signature drinks. {site.values.join(" · ")}.
+              Certified organic, ceremonial-grade Japanese matcha, whisked to order into signature
+              drinks. {site.values.join(" · ")}.
             </p>
           </div>
 
@@ -25,9 +27,7 @@ export function SiteFooter() {
               <address className="mt-5 space-y-1 text-sm leading-relaxed text-cream/75 not-italic">
                 <p>{site.address.venue}</p>
                 <p>{fullAddress}</p>
-                <p className="pt-2">
-                  {site.hours.label}, {site.hours.time}
-                </p>
+                <p className="pt-2">{hours}</p>
               </address>
               <a
                 href={site.mapsUrl}
@@ -42,7 +42,7 @@ export function SiteFooter() {
             <div>
               <h2 className="eyebrow font-sans text-sage">Explore</h2>
               <ul className="mt-5 space-y-2.5 text-sm">
-                {nav.map((item) => (
+                {footerNav.map((item) => (
                   <li key={item.href}>
                     <Link
                       href={item.href}
@@ -77,14 +77,23 @@ export function SiteFooter() {
                   </a>
                 </li>
                 <li>
-                  <a
-                    href={site.orderUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-cream/75 transition-colors hover:text-cream"
-                  >
-                    Order pickup <ArrowUpRight className="size-3.5" />
-                  </a>
+                  {orderExternal ? (
+                    <a
+                      href={orderHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 text-cream/75 transition-colors hover:text-cream"
+                    >
+                      Order pickup <ArrowUpRight className="size-3.5" />
+                    </a>
+                  ) : (
+                    <Link
+                      href={orderHref}
+                      className="text-cream/75 transition-colors hover:text-cream"
+                    >
+                      Order pickup
+                    </Link>
+                  )}
                 </li>
               </ul>
             </div>

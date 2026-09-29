@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Embedded database files (PGlite) when running without DATABASE_URL.
+    ".data/**",
   ]),
 ]);
 

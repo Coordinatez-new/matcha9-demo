@@ -95,3 +95,22 @@ export const LeafIcon = (p: IconProps) => (
     <path d="M5 19 13 11" />
   </Icon>
 );
+
+export const Minus = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5 12h14" />
+  </Icon>
+);
+
+export const CheckIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Icon>
+);
+
+export const BagIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M5.5 8.5h13l-1 11.5h-11l-1-11.5Z" />
+    <path d="M9 8.5V7a3 3 0 0 1 6 0v1.5" />
+  </Icon>
+);

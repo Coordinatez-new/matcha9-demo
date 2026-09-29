@@ -97,6 +97,15 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* `tabular-nums` rebuilds font-variant-numeric from Tailwind's numeric variables, which would
+     drop the body's lining figures (Cormorant's old-style "1" reads as "I"). Default the figure
+     variable on every element so tabular numbers stay lining. */
+  *,
+  ::before,
+  ::after {
+    --tw-numeric-figure: lining-nums;
+  }
+
   h1,
   h2,
   h3,
@@ -178,6 +187,63 @@
 .js [data-reveal][data-visible] {
   opacity: 1;
   transform: none;
+}
+
+/* 3D whisk cursor (components/cursor). The native cursor is hidden only while the whisk is
+   running, and text fields keep their caret so selecting text stays precise. */
+html.m9-whisk,
+html.m9-whisk * {
+  cursor: none !important;
+}
+html.m9-whisk
+  :is(
+    input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]),
+    textarea,
+    [contenteditable="true"]
+  ) {
+  cursor: text !important;
+}
+
+/* The hotspot: a small dot exactly under the pointer, so clicks land where they look. */
+.m9-cursor-dot {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 101;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 9999px;
+  background-color: var(--color-moss);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-cream) 85%, transparent);
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity 300ms ease,
+    width 350ms var(--ease-calm),
+    height 350ms var(--ease-calm),
+    margin 350ms var(--ease-calm),
+    background-color 300ms ease,
+    box-shadow 300ms ease,
+    scale 200ms var(--ease-calm);
+}
+.m9-cursor-dot[data-mode="link"] {
+  width: 32px;
+  height: 32px;
+  margin: -16px 0 0 -16px;
+  background-color: color-mix(in srgb, var(--color-matcha) 10%, transparent);
+  box-shadow:
+    inset 0 0 0 1.5px var(--color-moss),
+    0 0 0 2px color-mix(in srgb, var(--color-cream) 55%, transparent);
+}
+.m9-cursor-dot[data-mode="whisk"] {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  background-color: var(--color-matcha);
+}
+.m9-cursor-dot[data-pressed="true"] {
+  scale: 0.7;
 }
 
 /* Native <details> accordions: hide the default marker */

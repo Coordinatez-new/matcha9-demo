@@ -1,10 +1,11 @@
 "use client";
 
-import Image, { type StaticImageData } from "next/image";
+import Image from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
+import type { ImageRef } from "@/lib/menu";
 
-type Shot = { src: StaticImageData; alt: string; label: string; kind: "product" | "photo" };
+type Shot = { src: ImageRef; alt: string; label: string; kind: "product" | "photo" };
 
 /** Two views of a drink: the clean product shot and the real photo at the bar. */
 export function DrinkGallery({ shots }: { shots: Shot[] }) {
@@ -17,7 +18,7 @@ export function DrinkGallery({ shots }: { shots: Shot[] }) {
         {shots.map((shot, i) => (
           <Image
             key={shot.label}
-            src={shot.src}
+            src={shot.src.src}
             alt={shot.alt}
             fill
             preload={i === 0}
@@ -31,32 +32,34 @@ export function DrinkGallery({ shots }: { shots: Shot[] }) {
           />
         ))}
       </div>
-      <div className="mt-4 flex gap-3" role="group" aria-label="Choose a photo">
-        {shots.map((shot, i) => (
-          <button
-            key={shot.label}
-            type="button"
-            onClick={() => setActive(i)}
-            aria-pressed={i === active}
-            aria-label={`Show ${shot.label.toLowerCase()}`}
-            className={cn(
-              "relative size-20 overflow-hidden rounded-md border transition-colors duration-300",
-              i === active ? "border-moss" : "border-line hover:border-moss/40",
-              shot.kind === "product" && "bg-paper",
-            )}
-          >
-            <Image
-              src={shot.src}
-              alt=""
-              fill
-              sizes="80px"
-              className={
-                shot.kind === "product" ? "object-contain p-2 mix-blend-multiply" : "object-cover"
-              }
-            />
-          </button>
-        ))}
-      </div>
+      {shots.length > 1 && (
+        <div className="mt-4 flex gap-3" role="group" aria-label="Choose a photo">
+          {shots.map((shot, i) => (
+            <button
+              key={shot.label}
+              type="button"
+              onClick={() => setActive(i)}
+              aria-pressed={i === active}
+              aria-label={`Show ${shot.label.toLowerCase()}`}
+              className={cn(
+                "relative size-20 overflow-hidden rounded-md border transition-colors duration-300",
+                i === active ? "border-moss" : "border-line hover:border-moss/40",
+                shot.kind === "product" && "bg-paper",
+              )}
+            >
+              <Image
+                src={shot.src.src}
+                alt=""
+                fill
+                sizes="80px"
+                className={
+                  shot.kind === "product" ? "object-contain p-2 mix-blend-multiply" : "object-cover"
+                }
+              />
+            </button>
+          ))}
+        </div>
+      )}
       <p className="mt-4 eyebrow text-sage-deep" aria-live="polite">
         {current?.label}
       </p>

@@ -31,7 +31,7 @@ export function StandardSection() {
             additives, fillers or added sugar. Our blends pair that same matcha with natural flavors
             people crave, so a daily wellness habit is something to look forward to.
           </p>
-          <ArrowLink href="/matcha/" className="mt-8 text-moss">
+          <ArrowLink href="/matcha" className="mt-8 text-moss">
             Meet our matcha
           </ArrowLink>
         </Reveal>

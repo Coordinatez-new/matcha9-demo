@@ -22,7 +22,7 @@ export function CommunitySection() {
             Pop-ups, creator afternoons and our 09.09 launch. The Matcha Club is wellness, community
             and good vibes, one cup at a time.
           </SectionHeader>
-          <ArrowLink href="/community/" className="text-moss">
+          <ArrowLink href="/community" className="text-moss">
             Inside the Matcha Club
           </ArrowLink>
         </Reveal>

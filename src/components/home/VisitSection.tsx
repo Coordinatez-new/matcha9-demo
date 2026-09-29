@@ -6,10 +6,10 @@ import { ClockIcon, InstagramIcon, PhoneIcon, PinIcon } from "@/components/ui/ic
 import { Reveal } from "@/components/ui/Reveal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 
-export function VisitSection({ index = "07" }: { index?: string }) {
+export function VisitSection({ index = "07", hours }: { index?: string; hours: string }) {
   const rows = [
     { icon: PinIcon, label: "Address", value: fullAddress, note: site.address.venue },
-    { icon: ClockIcon, label: "Hours", value: `${site.hours.label}, ${site.hours.time}` },
+    { icon: ClockIcon, label: "Hours", value: hours },
     { icon: PhoneIcon, label: "Phone", value: site.phone.display, href: site.phone.href },
     {
       icon: InstagramIcon,
@@ -81,7 +81,7 @@ export function VisitSection({ index = "07" }: { index?: string }) {
               <ButtonLink href={site.mapsUrl} external>
                 Get directions
               </ButtonLink>
-              <ArrowLink href="/visit/" className="text-moss">
+              <ArrowLink href="/visit" className="text-moss">
                 Plan your visit
               </ArrowLink>
             </div>

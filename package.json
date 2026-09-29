@@ -1,7 +1,7 @@
 {
   "name": "matcha9-demo",
   "version": "0.1.0",
-  "description": "Website demo for Matcha 9, a ceremonial-grade matcha bar in Logan Square, Chicago.",
+  "description": "Website and ordering demo for Matcha 9, a ceremonial-grade matcha bar in Logan Square, Chicago: menu, pickup ordering and an owner dashboard.",
   "private": true,
   "engines": {
     "node": ">=20.9.0"
@@ -9,22 +9,31 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "preview": "npx --yes serve@14 out",
+    "start": "next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "db:reset": "node -e \"require('fs').rmSync('.data',{recursive:true,force:true});console.log('Local database removed. It is recreated with the starting menu on the next start.')\""
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "next": "16.3.7",
+    "pg": "^8.23.0",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1",
+    "sharp": "^0.35.5",
+    "three": "^0.186.1",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "^0.186.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.7",
     "prettier": "^3.9.9",

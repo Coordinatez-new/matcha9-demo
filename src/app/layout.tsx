@@ -1,8 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter, Pinyon_Script } from "next/font/google";
-import { AnnouncementBar } from "@/components/layout/AnnouncementBar";
-import { SiteFooter } from "@/components/layout/SiteFooter";
-import { SiteHeader } from "@/components/layout/SiteHeader";
 import { site, siteOrigin } from "@/lib/site";
 import "./globals.css";
 
@@ -64,18 +61,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: jsFlag }} />
       </head>
-      <body>
-        <a
-          href="#main"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[60] focus:rounded-full focus:bg-moss focus:px-5 focus:py-3 focus:text-sm focus:text-cream"
-        >
-          Skip to content
-        </a>
-        <AnnouncementBar />
-        <SiteHeader />
-        <main id="main">{children}</main>
-        <SiteFooter />
-      </body>
+      <body>{children}</body>
     </html>
   );
 }
