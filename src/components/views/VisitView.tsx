@@ -5,6 +5,7 @@ import { LocalBusinessJsonLd } from "@/components/seo/LocalBusinessJsonLd";
 import { Accordion } from "@/components/ui/Accordion";
 import { ArrowLink, ButtonLink } from "@/components/ui/Button";
 import { ClockIcon, InstagramIcon, PhoneIcon, PinIcon } from "@/components/ui/icons";
+import { MapEmbed } from "@/components/ui/MapEmbed";
 import { Reveal } from "@/components/ui/Reveal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { OrderPickupButton } from "@/components/order/OrderPickupButton";
@@ -149,12 +150,10 @@ export function VisitView({ hours, hoursNote }: { hours: string; hoursNote: stri
           </Reveal>
           <Reveal className="mt-12" delay={100}>
             <div className="overflow-hidden rounded-lg border border-moss/10 bg-cream">
-              <iframe
+              <MapEmbed
                 title="Map showing Matcha 9 inside Taco Maya at 2529 N Milwaukee Ave, Chicago"
                 src={site.mapEmbedUrl}
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                className="block h-[26rem] w-full grayscale-[35%] sepia-[12%] md:h-[32rem]"
+                address={fullAddress}
               />
             </div>
           </Reveal>
