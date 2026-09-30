@@ -188,6 +188,8 @@ export function mountDrinkScene(
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = 1;
+  // Shader info logs (harmless precision notes from Windows' D3D compiler) only in development.
+  renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = VSMShadowMap;
   // Shadows are redrawn only when the drink changes (see render), not every frame.
