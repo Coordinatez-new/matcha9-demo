@@ -13,6 +13,7 @@ export function MenuPreview({ items }: { items: MenuItem[] }) {
           <SectionHeader
             index="02"
             eyebrow="The menu"
+            jp="献立"
             title={
               <>
                 {countWord(items.length)} drinks, <em>one standard.</em>

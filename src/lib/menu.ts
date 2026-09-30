@@ -5,6 +5,9 @@
 
 export type ImageRef = { src: string; width: number; height: number };
 
+/** A photo in the dashboard's image library: uploaded, or one that ships with the site. */
+export type LibraryImage = ImageRef & { label: string; id?: string };
+
 export type OptionChoice = { id: string; label: string; priceCents: number };
 
 export type OptionGroup = {
@@ -199,4 +202,13 @@ export function slugify(value: string): string {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+/** "Nine signature matcha drinks from $5.00: Simply Matcha, … and Matchamisu." */
+export function menuDescription(items: { name: string; priceCents: number }[]) {
+  const from = items.length ? Math.min(...items.map((i) => i.priceCents)) : 0;
+  const names = items.map((i) => i.name);
+  const list =
+    names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names.at(-1)}` : names.join("");
+  return `${countWord(items.length)} signature matcha drinks from ${formatMoney(from)}: ${list}. Order ahead for pickup.`;
 }

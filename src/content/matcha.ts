@@ -74,13 +74,23 @@ export const standards = [
 export const tools = [
   {
     name: "Chasen",
+    jp: "茶筅",
     body: "The bamboo whisk. Its fine tines break the matcha up so it suspends smoothly instead of going gritty.",
   },
   {
     name: "Katakuchi",
+    jp: "片口",
     body: "The spouted stoneware bowl every drink is whisked in, then poured from.",
   },
-  { name: "Chashaku", body: "A slim scoop for measuring the matcha before it meets the water." },
-  { name: "Sifter", body: "A fine mesh that breaks up clumps before whisking." },
-  { name: "Kettle", body: "A gooseneck kettle for a steady pour of hot, never boiling, water." },
+  {
+    name: "Chashaku",
+    jp: "茶杓",
+    body: "A slim scoop for measuring the matcha before it meets the water.",
+  },
+  { name: "Sifter", jp: "篩", body: "A fine mesh that breaks up clumps before whisking." },
+  {
+    name: "Kettle",
+    jp: "湯沸かし",
+    body: "A gooseneck kettle for a steady pour of hot, never boiling, water.",
+  },
 ];

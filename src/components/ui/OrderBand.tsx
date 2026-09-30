@@ -4,7 +4,7 @@ import { Reveal } from "./Reveal";
 
 export function OrderBand() {
   return (
-    <section className="bg-forest text-cream">
+    <section className="bg-seigaiha bg-forest text-cream">
       <div className="container-page py-20 md:py-24">
         <Reveal className="flex flex-col gap-10 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">

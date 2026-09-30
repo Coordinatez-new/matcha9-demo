@@ -40,6 +40,7 @@ export function VisitSection({ index = "07", hours }: { index?: string; hours: s
             <SectionHeader
               index={index}
               eyebrow="Visit"
+              jp="ようこそ"
               title={
                 <>
                   Find us inside <em>Taco Maya.</em>

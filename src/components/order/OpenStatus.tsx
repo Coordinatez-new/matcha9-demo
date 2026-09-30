@@ -9,18 +9,21 @@ export function OpenStatus({
   storefront: Storefront;
   className?: string;
 }) {
-  const { mode, openNow, prepMinutes, nextOpening, pausedMessage } = storefront;
+  const { mode, known, openNow, prepMinutes, nextOpening, pausedMessage, hours } = storefront;
+  const lower = (s: string) => s.replace(/^(Today|Tomorrow)/, (m) => m.toLowerCase());
   const [tone, text] =
     mode === "paused"
       ? (["paused", pausedMessage] as const)
-      : openNow
-        ? (["open", `Open now · ready in about ${prepMinutes} minutes`] as const)
-        : ([
-            "closed",
-            nextOpening
-              ? `Closed right now. Order ahead for ${nextOpening.replace(/^(Today|Tomorrow)/, (m) => m.toLowerCase())}.`
-              : "Closed right now.",
-          ] as const);
+      : !known
+        ? (["hours", `Pickup during opening hours: ${hours}`] as const)
+        : openNow
+          ? (["open", `Open now · ready in about ${prepMinutes} minutes`] as const)
+          : ([
+              "closed",
+              nextOpening
+                ? `Closed right now. Order ahead for ${lower(nextOpening)}.`
+                : "Closed right now.",
+            ] as const);
 
   return (
     <p className={cn("flex items-start gap-2.5 text-sm leading-snug text-ink-soft", className)}>
@@ -29,7 +32,7 @@ export function OpenStatus({
         className={cn(
           "mt-1.5 size-2 shrink-0 rounded-full",
           tone === "open" && "bg-matcha shadow-[0_0_0_4px_rgb(125_154_78/0.18)]",
-          tone === "closed" && "bg-sage",
+          (tone === "closed" || tone === "hours") && "bg-sage",
           tone === "paused" && "bg-terracotta",
         )}
       />

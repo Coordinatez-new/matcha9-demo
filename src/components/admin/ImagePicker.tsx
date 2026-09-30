@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { uploadImageAction } from "@/app/admin/actions";
 import { cn } from "@/lib/cn";
-import type { ImageRef } from "@/lib/menu";
-import type { LibraryImage } from "@/server/media";
+import type { UploadResult } from "@/lib/forms";
+import type { ImageRef, LibraryImage } from "@/lib/menu";
+import { imageSrc } from "@/lib/paths";
 import { CloseIcon, Plus } from "@/components/ui/icons";
 import { adminButton } from "./ui";
 
@@ -16,6 +16,7 @@ export function ImageField({
   value,
   onChange,
   library,
+  onUpload,
   onUploaded,
   kind,
 }: {
@@ -24,6 +25,7 @@ export function ImageField({
   value: ImageRef | null;
   onChange: (image: ImageRef | null) => void;
   library: LibraryImage[];
+  onUpload: (form: FormData) => Promise<UploadResult>;
   onUploaded: (image: LibraryImage) => void;
   /** Studio shots sit on white and blend into the page; bar photos fill their frame. */
   kind: "product" | "photo";
@@ -45,7 +47,7 @@ export function ImageField({
     const form = new FormData();
     form.set("file", file);
     startTransition(async () => {
-      const result = await uploadImageAction(form);
+      const result = await onUpload(form);
       if (!result.ok) {
         setError(result.message);
         return;
@@ -69,7 +71,7 @@ export function ImageField({
         >
           {value ? (
             <Image
-              src={value.src}
+              src={imageSrc(value.src)}
               alt=""
               fill
               sizes="112px"
@@ -156,7 +158,7 @@ export function ImageField({
                     )}
                   >
                     <Image
-                      src={img.src}
+                      src={imageSrc(img.src)}
                       alt={img.label}
                       fill
                       sizes="120px"

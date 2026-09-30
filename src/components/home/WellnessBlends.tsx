@@ -4,6 +4,7 @@ import { formatMoney, menuNumber, type MenuItem } from "@/lib/menu";
 import { ArrowLink } from "@/components/ui/Button";
 import { Reveal } from "@/components/ui/Reveal";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { imageSrc } from "@/lib/paths";
 
 // A few real ingredients from each blend's full list, picked for recognition.
 const highlights: Record<string, string[]> = {
@@ -52,7 +53,7 @@ function BlendCard({ item, index }: { item: MenuItem; index: number }) {
       >
         {photo && (
           <Image
-            src={photo.src}
+            src={imageSrc(photo.src)}
             alt=""
             fill
             sizes="(min-width: 1024px) 24vw, (min-width: 640px) 50vw, 100vw"
@@ -98,6 +99,7 @@ export function WellnessBlends({ items }: { items: MenuItem[] }) {
           <SectionHeader
             index="03"
             eyebrow="Wellness blends"
+            jp="滋養"
             title={
               <>
                 Whole-food blends, <em>carried by matcha.</em>

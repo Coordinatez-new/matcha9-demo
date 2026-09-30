@@ -17,6 +17,7 @@ export function StandardSection() {
           <SectionHeader
             index="01"
             eyebrow="The standard"
+            jp="本物"
             title={
               <>
                 One ingredient, <em>done right.</em>

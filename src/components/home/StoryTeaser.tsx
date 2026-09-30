@@ -26,6 +26,13 @@ export function StoryTeaser() {
               <span className="font-display text-sm tracking-normal italic">05</span>
               <span className="h-px w-8 bg-cream/25" aria-hidden="true" />
               Our story
+              <span
+                lang="ja"
+                aria-hidden="true"
+                className="font-jp text-[0.8rem] font-normal tracking-[0.35em] text-cream/45 normal-case"
+              >
+                物語
+              </span>
             </p>
             <h2 className="mt-5 text-display-lg text-cream">{storyTitle}</h2>
           </Reveal>

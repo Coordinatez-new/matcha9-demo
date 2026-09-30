@@ -1,8 +1,8 @@
 import "server-only";
 import sharp from "sharp";
-import type { ImageRef } from "@/lib/menu";
+import { builtInImages } from "@/content/menu";
+import type { LibraryImage } from "@/lib/menu";
 import { getDb } from "./db";
-import { builtInImages } from "./db/seed";
 import { isUuid } from "./orders";
 
 /**
@@ -13,7 +13,7 @@ import { isUuid } from "./orders";
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_EDGE = 1600;
 
-export type LibraryImage = ImageRef & { label: string; id?: string };
+export type { LibraryImage };
 
 export async function saveUpload(file: File): Promise<LibraryImage> {
   if (!file.type.startsWith("image/")) throw new Error("Please choose an image file.");

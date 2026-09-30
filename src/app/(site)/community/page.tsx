@@ -18,7 +18,16 @@ export default function CommunityPage() {
     <>
       <section className="container-page grid gap-14 pt-14 pb-20 md:pt-20 lg:grid-cols-12 lg:items-center">
         <div className="animate-rise lg:col-span-6">
-          <p className="eyebrow text-sage-deep">{site.values.join(" · ")}</p>
+          <p className="flex flex-wrap items-center gap-3 eyebrow text-sage-deep">
+            {site.values.join(" · ")}
+            <span
+              lang="ja"
+              aria-hidden="true"
+              className="font-jp text-[0.8rem] font-normal tracking-[0.35em] text-sage normal-case"
+            >
+              茶会
+            </span>
+          </p>
           <h1 className="mt-6 text-display-xl">
             Welcome to the <em className="font-normal text-sage-deep">Matcha Club.</em>
           </h1>
@@ -35,6 +44,17 @@ export default function CommunityPage() {
               Visit the bar
             </ButtonLink>
           </div>
+          <figure className="mt-14 flex items-center gap-6 border-t border-line pt-8">
+            <span lang="ja" className="font-jp text-3xl leading-none text-moss tategaki">
+              一期一会
+            </span>
+            <figcaption className="max-w-xs text-sm leading-relaxed text-ink-soft">
+              <span className="block eyebrow text-sage-deep">Ichigo ichie</span>
+              <span className="mt-2 block">
+                One time, one meeting. A tea gathering happens once, so we make the most of it.
+              </span>
+            </figcaption>
+          </figure>
         </div>
         <div className="animate-rise [animation-delay:120ms] lg:col-span-5 lg:col-start-8">
           <div className="relative aspect-[3/4] overflow-hidden rounded-t-full bg-sand">

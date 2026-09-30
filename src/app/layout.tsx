@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Cormorant_Garamond, Inter, Pinyon_Script } from "next/font/google";
+import localFont from "next/font/local";
 import { site, siteOrigin } from "@/lib/site";
 import "./globals.css";
 
@@ -21,6 +22,18 @@ const script = Pinyon_Script({
   weight: "400",
   variable: "--font-pinyon",
   display: "swap",
+});
+
+// Japanese accents (kanji and kana): a subset of Shippori Mincho holding only the characters
+// the site uses. Rebuild with `node scripts/subset-japanese-font.mjs` after changing them.
+const japanese = localFont({
+  src: [
+    { path: "../assets/fonts/shippori-mincho-500.woff2", weight: "500" },
+    { path: "../assets/fonts/shippori-mincho-700.woff2", weight: "700" },
+  ],
+  variable: "--font-shippori",
+  display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -55,7 +68,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${display.variable} ${sans.variable} ${script.variable}`}
+      className={`${display.variable} ${sans.variable} ${script.variable} ${japanese.variable}`}
       suppressHydrationWarning
     >
       <head>

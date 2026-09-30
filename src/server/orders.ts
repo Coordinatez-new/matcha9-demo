@@ -1,19 +1,26 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
 import { connection } from "next/server";
-import { resolveSelections, type ImageRef, type SelectedOption } from "@/lib/menu";
+import type { SelectedOption } from "@/lib/menu";
 import {
-  nextStatus,
-  orderLimits,
+  FIRST_ORDER_NUMBER,
+  canMoveOrder,
+  checkOrder,
+  priceBag,
+  toGuestOrder,
   type BagLineInput,
   type GuestOrder,
   type Order,
   type OrderEvent,
   type OrderLine,
+  type OrderStats,
   type OrderStatus,
+  type PlaceOrderInput,
+  type PlaceOrderResult,
+  type Quote,
   type ToastSync,
 } from "@/lib/orders";
-import { planPickup, startOfStoreDay } from "@/lib/pickup";
+import { startOfStoreDay } from "@/lib/pickup";
 import { getDb, type Queryable } from "./db";
 import { getItemsByIds } from "./menu";
 import { getSettings } from "./settings";
@@ -22,130 +29,23 @@ import { sendOrderToToast, toastConnection } from "./toast";
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (value: string) => uuid.test(value);
 
-export type QuotedLine = {
-  itemId: string;
-  slug: string;
-  name: string;
-  image: ImageRef | null;
-  imageAlt: string;
-  selections: SelectedOption[];
-  unitPriceCents: number;
-  quantity: number;
-  lineTotalCents: number;
-  /** Where the line sits in the guest's bag, so issues can point at it. */
-  index: number;
-};
-
-export type Quote = {
-  lines: QuotedLine[];
-  /** Problems with the bag as sent: removed or sold-out drinks, too many items. */
-  issues: { index: number; message: string }[];
-  subtotalCents: number;
-  itemCount: number;
-};
+export type { PlaceOrderInput, PlaceOrderResult, Quote };
 
 /** Price a bag from the current menu. Never trusts names or prices from the browser. */
 export async function quoteBag(input: BagLineInput[]): Promise<Quote> {
-  const lines = input.slice(0, orderLimits.lines);
-  const ids = [...new Set(lines.map((l) => l.itemId).filter(isUuid))];
+  const ids = [...new Set(input.map((l) => l.itemId).filter(isUuid))];
   const items = new Map((await getItemsByIds(ids)).map((i) => [i.id, i]));
-
-  const quoted: QuotedLine[] = [];
-  const issues: Quote["issues"] = [];
-  for (const [index, line] of lines.entries()) {
-    const item = items.get(line.itemId);
-    if (!item || !item.isVisible) {
-      issues.push({ index, message: "One of your drinks is no longer on the menu." });
-      continue;
-    }
-    if (!item.inStock) {
-      issues.push({ index, message: `${item.name} is sold out right now.` });
-      continue;
-    }
-    const resolved = resolveSelections(item, line.selections ?? {});
-    if (!resolved.ok) {
-      issues.push({ index, message: resolved.error });
-      continue;
-    }
-    const quantity = Math.min(
-      Math.max(Math.floor(Number(line.quantity) || 1), 1),
-      orderLimits.quantity,
-    );
-    quoted.push({
-      itemId: item.id,
-      slug: item.slug,
-      name: item.name,
-      image: item.productImage ?? item.photoImage,
-      imageAlt: item.productImageAlt,
-      selections: resolved.selections,
-      unitPriceCents: resolved.unitPriceCents,
-      quantity,
-      lineTotalCents: resolved.unitPriceCents * quantity,
-      index,
-    });
-  }
-
-  const itemCount = quoted.reduce((n, l) => n + l.quantity, 0);
-  if (itemCount > orderLimits.items) {
-    issues.push({
-      index: -1,
-      message: `Online orders are limited to ${orderLimits.items} drinks. Call us for bigger orders.`,
-    });
-  }
-  return {
-    lines: quoted,
-    issues,
-    subtotalCents: quoted.reduce((sum, l) => sum + l.lineTotalCents, 0),
-    itemCount,
-  };
+  return priceBag(items, input);
 }
-
-export type PlaceOrderInput = {
-  lines: BagLineInput[];
-  name: string;
-  phone: string;
-  email: string | null;
-  notes: string | null;
-  /** "asap" or the ISO time of one of the offered pickup slots. */
-  pickup: string;
-};
-
-export type PlaceOrderResult = { ok: true; publicId: string } | { ok: false; error: string };
 
 const token = () => randomBytes(9).toString("base64url");
 
-/** Ticket numbers start here, like a fresh roll of order tickets. */
-const FIRST_ORDER_NUMBER = 101;
-
 export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResult> {
   const settings = await getSettings();
-  if (settings.ordering.mode === "paused")
-    return { ok: false, error: settings.ordering.pausedMessage };
-  if (settings.ordering.mode !== "onsite") {
-    return { ok: false, error: "Online orders are being taken on our Toast ordering page." };
-  }
-
   const quote = await quoteBag(input.lines);
-  if (quote.issues.length) {
-    return { ok: false, error: `${quote.issues[0]!.message} Please check your bag.` };
-  }
-  if (!quote.lines.length) return { ok: false, error: "Your bag is empty." };
-
-  // Re-derive the pickup times the checkout offered and accept only one of those.
-  const plan = planPickup(new Date(), settings.store.hours, settings.ordering);
-  let pickupAt: Date;
-  const asap = input.pickup === "asap";
-  if (asap) {
-    if (!plan.asap)
-      return { ok: false, error: "ASAP pickup isn’t available now. Please pick a time." };
-    pickupAt = new Date(plan.asap.at);
-  } else {
-    const offered = plan.days.some((d) => d.slots.some((s) => s.at === input.pickup));
-    if (!offered) {
-      return { ok: false, error: "That pickup time is no longer available. Please pick another." };
-    }
-    pickupAt = new Date(input.pickup);
-  }
+  const check = checkOrder(settings, quote, input.pickup);
+  if (!check.ok) return check;
+  const { pickupAt, asap } = check;
 
   const toastLive = toastConnection().live;
   const db = await getDb();
@@ -350,21 +250,7 @@ export async function getGuestOrder(publicId: string): Promise<GuestOrder | null
   if (!/^[A-Za-z0-9_-]{8,32}$/.test(publicId)) return null;
   const db = await getDb();
   const order = (await loadOrders(db, "where o.public_id = $1", [publicId]))[0];
-  if (!order) return null;
-  return {
-    number: order.number,
-    publicId: order.publicId,
-    status: order.status,
-    pickupAt: order.pickupAt,
-    pickupAsap: order.pickupAsap,
-    subtotalCents: order.subtotalCents,
-    itemCount: order.itemCount,
-    lines: order.lines,
-    events: order.events,
-    createdAt: order.createdAt,
-    notes: order.notes,
-    firstName: order.customerName.trim().split(/\s+/)[0] ?? "",
-  };
+  return order ? toGuestOrder(order) : null;
 }
 
 /** New, preparing and ready orders, soonest pickup first. */
@@ -405,17 +291,16 @@ export async function setOrderStatus(id: string, status: OrderStatus) {
       [id],
     );
     if (!row) return { ok: false as const, error: "Order not found." };
-    const allowed =
-      nextStatus[row.status] === status ||
-      (status === "cancelled" && row.status !== "picked_up" && row.status !== "cancelled");
-    if (!allowed) return { ok: false as const, error: "That order has already moved on." };
+    if (!canMoveOrder(row.status, status)) {
+      return { ok: false as const, error: "That order has already moved on." };
+    }
     await tx.query("update orders set status = $1, updated_at = now() where id = $2", [status, id]);
     await tx.query("insert into order_events (order_id, status) values ($1, $2)", [id, status]);
     return { ok: true as const };
   });
 }
 
-export async function orderStats() {
+export async function orderStats(): Promise<OrderStats> {
   const db = await getDb();
   const since = startOfStoreDay();
   const [today] = await db.query<{ count: number; sales: number; items: number }>(

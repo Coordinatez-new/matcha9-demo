@@ -13,6 +13,7 @@ export function CommunitySection() {
           <SectionHeader
             index="06"
             eyebrow={site.values.join(" · ")}
+            jp="茶会"
             title={
               <>
                 Come for the matcha. <em>Stay for the club.</em>

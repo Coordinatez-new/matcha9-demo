@@ -9,6 +9,8 @@ export type Storefront = {
   pausedMessage: string;
   pickupInstructions: string;
   prepMinutes: number;
+  /** False until the time is known (the static preview's first render): show hours only. */
+  known: boolean;
   openNow: boolean;
   /** When the bar next opens, if it's closed now, e.g. "Tomorrow at 9 am". */
   nextOpening: string | null;
@@ -20,17 +22,18 @@ export type Storefront = {
 export function buildStorefront(
   settings: Settings,
   suggestions: OrderableItem[],
-  now = new Date(),
+  now: Date | null,
 ): Storefront {
-  const plan = planPickup(now, settings.store.hours, settings.ordering);
+  const plan = now ? planPickup(now, settings.store.hours, settings.ordering) : null;
   return {
     mode: settings.ordering.mode,
     toastUrl: settings.toast.onlineOrderingUrl,
     pausedMessage: settings.ordering.pausedMessage,
     pickupInstructions: settings.ordering.pickupInstructions,
     prepMinutes: settings.ordering.prepMinutes,
-    openNow: plan.openNow,
-    nextOpening: plan.nextOpening ? describeTime(new Date(plan.nextOpening), now) : null,
+    known: !!plan,
+    openNow: plan?.openNow ?? false,
+    nextOpening: plan?.nextOpening && now ? describeTime(new Date(plan.nextOpening), now) : null,
     hours: hoursLine(settings.store.hours),
     suggestions,
   };

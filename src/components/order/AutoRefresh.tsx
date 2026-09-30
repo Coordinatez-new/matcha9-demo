@@ -2,13 +2,15 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
+import { isStaticDemo } from "@/lib/paths";
 
 /** Re-render the page from the server every few seconds (and on return to the tab). */
 export function AutoRefresh({ every = 5000, active = true }: { every?: number; active?: boolean }) {
   const router = useRouter();
 
   useEffect(() => {
-    if (!active) return;
+    // The static preview has no server to re-render from; its pages follow the demo store.
+    if (!active || isStaticDemo) return;
     const refresh = () => {
       if (document.visibilityState === "visible") router.refresh();
     };

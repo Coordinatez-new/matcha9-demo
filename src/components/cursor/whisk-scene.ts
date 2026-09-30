@@ -32,8 +32,8 @@ import {
  * travel, settles with a soft overshoot, and whisks when it passes over a drink.
  */
 
-const CANVAS = 184; // CSS px
-const PX_PER_CM = 7.3; // the 11 cm whisk ends up about 80 px tall
+const CANVAS = 132; // CSS px
+const PX_PER_CM = 5.1; // the 11 cm whisk ends up about 56 px tall
 
 const bamboo = new Color("#dcc89d");
 const bambooLight = new Color("#ead9b2");
@@ -123,10 +123,10 @@ function buildWhisk() {
       [1.62, 0.02],
       [1.3, 0.3],
     ],
-    0.1,
+    0.12,
     true,
   );
-  whisk.add(ring(outer, 44, 0));
+  whisk.add(ring(outer, 40, 0));
 
   // Inner tines gather into a slim cone at the centre.
   const inner = tine(
@@ -137,10 +137,10 @@ function buildWhisk() {
       [0.32, 0.95],
       [0.12, 0.45],
     ],
-    0.085,
+    0.1,
     true,
   );
-  whisk.add(ring(inner, 22, 0.5));
+  whisk.add(ring(inner, 20, 0.5));
 
   return whisk;
 }
@@ -207,8 +207,8 @@ export function mountWhisk(): WhiskHandle | null {
   const heightCm = CANVAS / PX_PER_CM;
   const distance = heightCm / 2 / Math.tan(((fov / 2) * Math.PI) / 180);
   const camera = new PerspectiveCamera(fov, 1, 1, distance * 3);
-  const tipX = 56;
-  const tipY = CANVAS - 48;
+  const tipX = 40;
+  const tipY = CANVAS - 34;
   const look = new Vector3((CANVAS / 2 - tipX) / PX_PER_CM, (tipY - CANVAS / 2) / PX_PER_CM, 0);
   camera.position.set(look.x, look.y + 1.2, distance);
   camera.lookAt(look);
@@ -224,8 +224,10 @@ export function mountWhisk(): WhiskHandle | null {
 
   // ── Motion ───────────────────────────────────────────────────────────────
   const pointer = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-  const pos = { x: pointer.x, y: pointer.y, vx: 0, vy: 0 };
-  const lean = { z: 0, x: 0, vz: 0, vx: 0 };
+  const posX = { value: pointer.x, velocity: 0 };
+  const posY = { value: pointer.y, velocity: 0 };
+  const leanZ = { value: 0, velocity: 0 };
+  const leanX = { value: 0, velocity: 0 };
   let spin = 0;
   let scale = 1;
   let press = 0;
@@ -278,8 +280,8 @@ export function mountWhisk(): WhiskHandle | null {
     if (!seen) {
       // First sighting: start at the pointer instead of flying in from the centre.
       seen = true;
-      pos.x = pointer.x;
-      pos.y = pointer.y;
+      posX.value = pointer.x;
+      posY.value = pointer.y;
     }
     setMode(e.target);
     show(true);
@@ -307,17 +309,16 @@ export function mountWhisk(): WhiskHandle | null {
   document.addEventListener("mouseout", onLeave);
   document.addEventListener("visibilitychange", onVisibility);
 
-  const spring = (
-    value: number,
-    velocity: number,
+  /** Advance a damped spring towards its target by one frame. */
+  const step = (
+    s: { value: number; velocity: number },
     target: number,
     k: number,
     c: number,
     dt: number,
   ) => {
-    const accel = k * (target - value) - c * velocity;
-    const v = velocity + accel * dt;
-    return [value + v * dt, v] as const;
+    s.velocity += (k * (target - s.value) - c * s.velocity) * dt;
+    s.value += s.velocity * dt;
   };
 
   function tick(now: number) {
@@ -326,41 +327,45 @@ export function mountWhisk(): WhiskHandle | null {
     const t = now / 1000;
 
     // Follow: a slightly under-damped spring, so it glides and settles with a soft overshoot.
-    [pos.x, pos.vx] = spring(pos.x, pos.vx, pointer.x, 190, 21, dt);
-    [pos.y, pos.vy] = spring(pos.y, pos.vy, pointer.y, 190, 21, dt);
+    step(posX, pointer.x, 190, 21, dt);
+    step(posY, pointer.y, 190, 21, dt);
 
     // Lean into the motion like a brush dragged across paper; wobble back when it stops.
     shake += ((mode === "whisk" ? 1 : 0) - shake) * Math.min(1, dt * 6);
     const whisking = Math.sin(t * 17) * 0.16 * shake;
-    const targetZ = Math.max(-0.42, Math.min(0.42, -pos.vx * 0.0007)) + whisking;
-    const targetX = Math.max(-0.3, Math.min(0.3, pos.vy * 0.0005));
-    [lean.z, lean.vz] = spring(lean.z, lean.vz, targetZ, 150, 13, dt);
-    [lean.x, lean.vx] = spring(lean.x, lean.vx, targetX, 150, 13, dt);
+    const targetZ = Math.max(-0.42, Math.min(0.42, -posX.velocity * 0.0007)) + whisking;
+    const targetX = Math.max(-0.3, Math.min(0.3, posY.velocity * 0.0005));
+    step(leanZ, targetZ, 150, 13, dt);
+    step(leanX, targetX, 150, 13, dt);
 
     // Spin on its own axis: slowly at rest, faster with speed or while whisking.
-    const speed = Math.hypot(pos.vx, pos.vy);
+    const speed = Math.hypot(posX.velocity, posY.velocity);
     spin += dt * (0.35 + Math.min(speed * 0.004, 5) + (mode === "whisk" ? 4 : 0));
 
     const targetScale = mode === "link" ? 1.12 : mode === "whisk" ? 1.08 : 1;
     scale += (targetScale - scale) * Math.min(1, dt * 10);
     press = Math.max(0, press - dt * 4);
 
-    pivot.rotation.set(0.22 + lean.x, 0, baseTilt + lean.z + (mode === "link" ? 0.18 : 0));
+    pivot.rotation.set(
+      0.22 + leanX.value,
+      0,
+      baseTilt + leanZ.value + (mode === "link" ? 0.18 : 0),
+    );
     whisk.rotation.y = spin;
     const squash = 1 - press * 0.12;
     pivot.scale.set(scale * (1 + press * 0.05), scale * squash, scale * (1 + press * 0.05));
 
     // Whisking over a drink: a quick side-to-side stroke, the way matcha is whisked in a bowl.
-    const stroke = Math.sin(t * 18) * 3.5 * shake;
-    const dip = press * 5;
-    canvas.style.transform = `translate3d(${pos.x - hotspot.x + stroke}px, ${pos.y - hotspot.y + dip}px, 0)`;
+    const stroke = Math.sin(t * 18) * 2.5 * shake;
+    const dip = press * 4;
+    canvas.style.transform = `translate3d(${posX.value - hotspot.x + stroke}px, ${posY.value - hotspot.y + dip}px, 0)`;
     renderer.render(scene, camera);
 
     const settled =
-      Math.abs(pointer.x - pos.x) < 0.2 &&
-      Math.abs(pointer.y - pos.y) < 0.2 &&
+      Math.abs(pointer.x - posX.value) < 0.2 &&
+      Math.abs(pointer.y - posY.value) < 0.2 &&
       speed < 1 &&
-      Math.abs(lean.vz) < 0.002 &&
+      Math.abs(leanZ.velocity) < 0.002 &&
       press === 0 &&
       mode !== "whisk";
     // Keep a gentle idle spin going while visible; stop entirely when hidden.

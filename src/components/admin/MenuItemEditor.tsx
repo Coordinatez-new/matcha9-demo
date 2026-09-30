@@ -3,12 +3,20 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
-import { deleteItemAction, saveItemAction, type ItemFormInput } from "@/app/admin/actions";
 import { cn } from "@/lib/cn";
-import { slugify, type Category, type ImageRef, type MenuItem, type OptionGroup } from "@/lib/menu";
-import type { LibraryImage } from "@/server/media";
+import type { ItemFormInput } from "@/lib/forms";
+import {
+  slugify,
+  type Category,
+  type ImageRef,
+  type LibraryImage,
+  type MenuItem,
+  type OptionGroup,
+} from "@/lib/menu";
+import { adminItemHref } from "@/lib/paths";
 import { ArrowUpRight, CloseIcon, Plus } from "@/components/ui/icons";
 import { ImageField } from "./ImagePicker";
+import type { EditorActions } from "./types";
 import { Card, Field, adminButton, inputClass } from "./ui";
 
 type Draft = {
@@ -108,10 +116,12 @@ export function MenuItemEditor({
   item,
   categories,
   library: initialLibrary,
+  actions,
 }: {
   item: MenuItem | null;
   categories: Category[];
   library: LibraryImage[];
+  actions: EditorActions;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState(() => toDraft(item, categories));
@@ -171,14 +181,14 @@ export function MenuItemEditor({
       featured: draft.featured,
     };
     startSaving(async () => {
-      const result = await saveItemAction(item?.id ?? null, input);
+      const result = await actions.saveItem(item?.id ?? null, input);
       if (!result.ok) {
         setErrors(result.fields);
         setMessage({ ok: false, text: result.message });
         return;
       }
       setMessage({ ok: true, text: "Saved. It’s live on the website." });
-      if (!item) router.replace(`/admin/menu/${result.id}?created=1`);
+      if (!item) router.replace(adminItemHref(result.id, { created: "1" }));
       else router.refresh();
     });
   };
@@ -347,6 +357,7 @@ export function MenuItemEditor({
                 value={draft.productImage}
                 onChange={(img) => set("productImage", img)}
                 library={library}
+                onUpload={actions.uploadImage}
                 onUploaded={(img) => setLibrary((l) => [img, ...l])}
                 kind="product"
               />
@@ -367,6 +378,7 @@ export function MenuItemEditor({
                 value={draft.photoImage}
                 onChange={(img) => set("photoImage", img)}
                 library={library}
+                onUpload={actions.uploadImage}
                 onUploaded={(img) => setLibrary((l) => [img, ...l])}
                 kind="photo"
               />
@@ -736,7 +748,10 @@ export function MenuItemEditor({
                 )
               )
                 return;
-              startDeleting(() => deleteItemAction(item.id));
+              startDeleting(async () => {
+                await actions.deleteItem(item.id);
+                router.replace("/admin/menu?deleted=1");
+              });
             }}
             className={cn(adminButton.danger, "w-full")}
           >

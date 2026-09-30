@@ -208,7 +208,9 @@ export async function moveItem(id: string, direction: -1 | 1) {
     const from = ids.indexOf(id);
     const to = from + direction;
     if (from < 0 || to < 0 || to >= ids.length) return;
-    [ids[from], ids[to]] = [ids[to]!, ids[from]!];
+    const moved = ids[from]!;
+    ids[from] = ids[to]!;
+    ids[to] = moved;
     for (const [sort, itemId] of ids.entries()) {
       await tx.query("update menu_items set sort = $1 where id = $2", [sort, itemId]);
     }
@@ -251,7 +253,9 @@ export async function moveCategory(id: string, direction: -1 | 1) {
     const from = ids.indexOf(id);
     const to = from + direction;
     if (from < 0 || to < 0 || to >= ids.length) return;
-    [ids[from], ids[to]] = [ids[to]!, ids[from]!];
+    const moved = ids[from]!;
+    ids[from] = ids[to]!;
+    ids[to] = moved;
     for (const [sort, categoryId] of ids.entries()) {
       await tx.query("update categories set sort = $1 where id = $2", [sort, categoryId]);
     }

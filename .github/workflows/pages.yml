@@ -1,0 +1,71 @@
+name: Deploy design preview to GitHub Pages
+
+# The static design preview (`npm run build:pages`): the same site, with the dashboard, bag and
+# checkout running on a demo store in the browser. The full server build is checked in ci.yml.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Allow the GITHUB_TOKEN to publish to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; never cancel a production deploy in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@v6
+
+      - name: Restore Next.js build cache
+        uses: actions/cache@v6
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-pages-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-pages-${{ hashFiles('package-lock.json') }}-
+
+      - name: Build the static preview
+        run: npm run build:pages
+        env:
+          # "/<repo-name>" for project sites, "" for user/org sites and custom domains.
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          NEXT_PUBLIC_SITE_URL: ${{ steps.pages.outputs.base_url }}
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ./out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

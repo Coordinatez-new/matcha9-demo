@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import logoCream from "@/assets/brand/matcha9-logo-cream.webp";
 import { footerNav, fullAddress, site } from "@/lib/site";
+import { Hanko } from "@/components/ui/Hanko";
 import { ArrowUpRight, InstagramIcon } from "@/components/ui/icons";
 
 type SiteFooterProps = { hours: string; orderHref: string; orderExternal: boolean };
@@ -9,12 +10,18 @@ type SiteFooterProps = { hours: string; orderHref: string; orderExternal: boolea
 export function SiteFooter({ hours, orderHref, orderExternal }: SiteFooterProps) {
   const year = 2026;
   return (
-    <footer className="relative overflow-hidden bg-forest text-cream">
+    <footer className="bg-seigaiha relative overflow-hidden bg-forest text-cream">
       <div className="container-page pt-20 pb-10 md:pt-28">
         <div className="grid gap-14 lg:grid-cols-12">
           <div className="lg:col-span-5">
-            <Image src={logoCream} alt={site.name} className="h-auto w-28" />
+            <div className="flex items-end gap-5">
+              <Image src={logoCream} alt={site.name} className="h-auto w-28" />
+              <Hanko className="mb-2 size-10 text-xl" />
+            </div>
             <p className="mt-8 font-script text-4xl text-terracotta">{site.motto}</p>
+            <p lang="ja" className="mt-2 font-jp text-sm tracking-[0.4em] text-cream/45">
+              心を込めて
+            </p>
             <p className="mt-5 max-w-sm leading-relaxed text-cream/65">
               Certified organic, ceremonial-grade Japanese matcha, whisked to order into signature
               drinks. {site.values.join(" · ")}.

@@ -1,13 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import {
-  saveAnnouncementAction,
-  saveHoursAction,
-  saveOrderingAction,
-  saveToastAction,
-  type FormState,
-} from "@/app/admin/actions";
+import type { FormState } from "@/lib/forms";
 import { cn } from "@/lib/cn";
 import {
   weekdays,
@@ -17,6 +11,7 @@ import {
   type ToastSettings,
 } from "@/lib/settings";
 import { FormMessage, SubmitButton } from "./controls";
+import type { FormAction } from "./types";
 import { Field, inputClass } from "./ui";
 
 function Footer({ state }: { state: FormState }) {
@@ -43,8 +38,8 @@ const modeCopy: Record<OrderingSettings["mode"], { title: string; body: string }
   },
 };
 
-export function OrderingForm({ value }: { value: OrderingSettings }) {
-  const [state, action] = useActionState<FormState, FormData>(saveOrderingAction, null);
+export function OrderingForm({ value, save }: { value: OrderingSettings; save: FormAction }) {
+  const [state, action] = useActionState<FormState, FormData>(save, null);
   const [mode, setMode] = useState(value.mode);
   return (
     <form action={action}>
@@ -140,8 +135,8 @@ export function OrderingForm({ value }: { value: OrderingSettings }) {
   );
 }
 
-export function HoursForm({ value }: { value: StoreSettings }) {
-  const [state, action] = useActionState<FormState, FormData>(saveHoursAction, null);
+export function HoursForm({ value, save }: { value: StoreSettings; save: FormAction }) {
+  const [state, action] = useActionState<FormState, FormData>(save, null);
   const [closed, setClosed] = useState(value.hours.map((d) => d.closed));
   // Show Monday first, like a printed week.
   const order = [1, 2, 3, 4, 5, 6, 0];
@@ -221,8 +216,14 @@ export function HoursForm({ value }: { value: StoreSettings }) {
   );
 }
 
-export function AnnouncementForm({ value }: { value: AnnouncementSettings }) {
-  const [state, action] = useActionState<FormState, FormData>(saveAnnouncementAction, null);
+export function AnnouncementForm({
+  value,
+  save,
+}: {
+  value: AnnouncementSettings;
+  save: FormAction;
+}) {
+  const [state, action] = useActionState<FormState, FormData>(save, null);
   return (
     <form action={action}>
       <label className="flex items-center gap-3 text-sm font-medium text-ink">
@@ -261,8 +262,8 @@ export function AnnouncementForm({ value }: { value: AnnouncementSettings }) {
   );
 }
 
-export function ToastForm({ value }: { value: ToastSettings }) {
-  const [state, action] = useActionState<FormState, FormData>(saveToastAction, null);
+export function ToastForm({ value, save }: { value: ToastSettings; save: FormAction }) {
+  const [state, action] = useActionState<FormState, FormData>(save, null);
   return (
     <form action={action}>
       <Field

@@ -54,6 +54,15 @@ export function Hero() {
         </div>
 
         <div className="relative lg:col-span-5">
+          <p
+            lang="ja"
+            aria-hidden="true"
+            className="absolute top-2 -right-2 hidden animate-fade-in font-jp text-sm tracking-[0.5em] text-sage-deep tategaki [animation-delay:600ms] lg:block xl:-right-8"
+          >
+            抹茶
+            <span className="my-3 inline-block h-10 w-px bg-line align-middle" />
+            心を込めて
+          </p>
           <div className="animate-rise [animation-delay:120ms]">
             <div className="relative mx-auto aspect-[3/4.15] w-full max-w-md overflow-hidden rounded-t-full bg-sand">
               <Image

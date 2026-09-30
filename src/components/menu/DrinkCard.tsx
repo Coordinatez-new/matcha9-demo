@@ -3,6 +3,7 @@ import Link from "next/link";
 import { cn } from "@/lib/cn";
 import { formatMoney, menuNumber, toOrderable, type MenuItem } from "@/lib/menu";
 import { QuickAdd } from "@/components/order/QuickAdd";
+import { imageSrc } from "@/lib/paths";
 
 type DrinkCardProps = {
   item: MenuItem;
@@ -40,7 +41,7 @@ export function DrinkCard({
         >
           {image && (
             <Image
-              src={image.src}
+              src={imageSrc(image.src)}
               alt=""
               fill
               sizes={sizes}

@@ -1,14 +1,15 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { saveCategoryAction, type FormState } from "@/app/admin/actions";
+import type { FormState } from "@/lib/forms";
 import { slugify, type Category } from "@/lib/menu";
 import { FormMessage, SubmitButton } from "./controls";
+import type { FormAction } from "./types";
 import { Field, inputClass } from "./ui";
 
 /** Inline editor for one existing category. Its id (used in links) never changes. */
-export function CategoryForm({ category }: { category: Category }) {
-  const [state, action] = useActionState<FormState, FormData>(saveCategoryAction, null);
+export function CategoryForm({ category, save }: { category: Category; save: FormAction }) {
+  const [state, action] = useActionState<FormState, FormData>(save, null);
   return (
     <form action={action} className="grid flex-1 gap-3 md:grid-cols-[14rem_1fr_auto] md:items-end">
       <input type="hidden" name="id" value={category.id} />
@@ -33,10 +34,10 @@ export function CategoryForm({ category }: { category: Category }) {
   );
 }
 
-export function NewCategoryForm() {
+export function NewCategoryForm({ save }: { save: FormAction }) {
   const [label, setLabel] = useState("");
   const [state, action] = useActionState<FormState, FormData>(async (prev, form) => {
-    const result = await saveCategoryAction(prev, form);
+    const result = await save(prev, form);
     if (result?.ok) setLabel("");
     return result;
   }, null);

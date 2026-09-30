@@ -1,12 +1,12 @@
-import { retryToastAction, setOrderStatusAction } from "@/app/admin/actions";
 import { cn } from "@/lib/cn";
 import { describeSelections, formatMoney } from "@/lib/menu";
 import { nextStatus, statusCopy, type Order } from "@/lib/orders";
 import { describeTime } from "@/lib/pickup";
 import { ActionButton } from "./controls";
+import type { OrderActions } from "./types";
 import { Badge } from "./ui";
 
-function ToastLine({ order }: { order: Order }) {
+function ToastLine({ order, retry }: { order: Order; retry: OrderActions["retryToast"] }) {
   switch (order.toastStatus) {
     case "sent":
       return (
@@ -22,7 +22,7 @@ function ToastLine({ order }: { order: Order }) {
           <Badge tone="red">Not in Toast</Badge>
           {order.toastError && <p className="text-xs text-terracotta-deep">{order.toastError}</p>}
           <ActionButton
-            action={retryToastAction.bind(null, order.id)}
+            action={retry.bind(null, order.id)}
             pendingLabel="Retrying…"
             variant="ghost"
           >
@@ -36,7 +36,15 @@ function ToastLine({ order }: { order: Order }) {
 }
 
 /** One ticket on the orders board. */
-export function OrderCard({ order, now }: { order: Order; now: Date }) {
+export function OrderCard({
+  order,
+  now,
+  actions,
+}: {
+  order: Order;
+  now: Date;
+  actions: OrderActions;
+}) {
   const pickup = new Date(order.pickupAt);
   const minutes = Math.round((pickup.getTime() - now.getTime()) / 60_000);
   const next = nextStatus[order.status];
@@ -109,14 +117,14 @@ export function OrderCard({ order, now }: { order: Order; now: Date }) {
         </a>
       </div>
       <div className="mt-3">
-        <ToastLine order={order} />
+        <ToastLine order={order} retry={actions.retryToast} />
       </div>
 
       {open && (
         <div className="mt-5 flex items-center justify-between gap-3">
           {next && (
             <ActionButton
-              action={setOrderStatusAction.bind(null, order.id, next)}
+              action={actions.setOrderStatus.bind(null, order.id, next)}
               variant="primary"
               pendingLabel="Updating…"
             >
@@ -124,7 +132,7 @@ export function OrderCard({ order, now }: { order: Order; now: Date }) {
             </ActionButton>
           )}
           <ActionButton
-            action={setOrderStatusAction.bind(null, order.id, "cancelled")}
+            action={actions.setOrderStatus.bind(null, order.id, "cancelled")}
             confirm={`Cancel order #${order.number} for ${order.customerName}?`}
             variant="ghost"
           >

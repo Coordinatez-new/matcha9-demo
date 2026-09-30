@@ -57,6 +57,7 @@ export function RitualSection() {
             <SectionHeader
               index="04"
               eyebrow="The ritual"
+              jp="点前"
               title={
                 <>
                   How every cup <em>is made.</em>

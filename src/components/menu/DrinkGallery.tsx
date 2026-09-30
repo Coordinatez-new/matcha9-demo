@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { cn } from "@/lib/cn";
 import type { ImageRef } from "@/lib/menu";
+import { imageSrc } from "@/lib/paths";
 
 type Shot = { src: ImageRef; alt: string; label: string; kind: "product" | "photo" };
 
@@ -18,7 +19,7 @@ export function DrinkGallery({ shots }: { shots: Shot[] }) {
         {shots.map((shot, i) => (
           <Image
             key={shot.label}
-            src={shot.src.src}
+            src={imageSrc(shot.src.src)}
             alt={shot.alt}
             fill
             preload={i === 0}
@@ -48,7 +49,7 @@ export function DrinkGallery({ shots }: { shots: Shot[] }) {
               )}
             >
               <Image
-                src={shot.src.src}
+                src={imageSrc(shot.src.src)}
                 alt=""
                 fill
                 sizes="80px"

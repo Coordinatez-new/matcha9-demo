@@ -27,6 +27,7 @@
   /* Warm accent */
   --color-terracotta: #c9876e; /* logo tile (decorative) */
   --color-terracotta-deep: #a9654d;
+  --color-shu: #b44d36; /* vermilion, for the hanko seal only */
 
   /* Motion */
   --ease-calm: cubic-bezier(0.22, 1, 0.36, 1);
@@ -70,13 +71,44 @@
       transform: rotate(360deg);
     }
   }
+
+  /* A hanko pressed onto paper: comes down, squashes a touch, settles slightly askew. */
+  @keyframes stamp {
+    0% {
+      opacity: 0;
+      transform: scale(1.7) rotate(-12deg);
+    }
+    60% {
+      opacity: 1;
+      transform: scale(0.94) rotate(-3deg);
+    }
+    100% {
+      transform: scale(1) rotate(-4deg);
+    }
+  }
 }
 
 /* Fonts come from next/font variables set on <html> (see layout.tsx). */
 @theme inline {
-  --font-display: var(--font-cormorant), "Cormorant Garamond", Garamond, "Times New Roman", serif;
+  /* Japanese characters fall through to Shippori Mincho wherever the display serif is used. */
+  --font-display:
+    var(--font-cormorant), "Cormorant Garamond", Garamond, var(--font-shippori), "Times New Roman",
+    serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-script: var(--font-pinyon), "Snell Roundhand", cursive;
+  --font-jp:
+    var(--font-shippori), "Shippori Mincho", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP",
+    serif;
+}
+
+/* Washi: fine paper grain over soft mottling, very faint. Raised cards (paper) stay smooth. */
+:root {
+  --washi: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='360'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .36 0 0 0 0 .31 0 0 0 0 .24 0 0 0 .055 0'/%3E%3C/filter%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='3' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .45 0 0 0 0 .35 0 0 0 .05 -.01'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23m)'/%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+
+.bg-cream,
+.bg-sand {
+  background-image: var(--washi);
 }
 
 @layer base {
@@ -87,6 +119,7 @@
 
   body {
     background-color: var(--color-cream);
+    background-image: var(--washi);
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-size: 1rem;
@@ -168,6 +201,81 @@
   line-height: 1.06;
 }
 
+/* Japanese set vertically (tategaki), top to bottom, right to left. */
+@utility tategaki {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+/* Seigaiha, the "blue ocean waves" pattern: barely-there lines on the dark bands, rising from
+   the bottom edge and fading out before the content. */
+@utility bg-seigaiha {
+  position: relative;
+  isolation: isolate;
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    --wave: var(--color-forest);
+    --crest: color-mix(in srgb, var(--color-cream) 4%, var(--color-forest));
+    mask-image: linear-gradient(to top, black, transparent 55%);
+    background-color: var(--wave);
+    background-image:
+      radial-gradient(
+        circle at 100% 150%,
+        var(--wave) 24%,
+        var(--crest) 25% 28%,
+        var(--wave) 29% 36%,
+        var(--crest) 36% 40%,
+        transparent 40%
+      ),
+      radial-gradient(
+        circle at 0 150%,
+        var(--wave) 24%,
+        var(--crest) 25% 28%,
+        var(--wave) 29% 36%,
+        var(--crest) 36% 40%,
+        transparent 40%
+      ),
+      radial-gradient(
+        circle at 50% 100%,
+        var(--crest) 10%,
+        var(--wave) 11% 23%,
+        var(--crest) 24% 30%,
+        var(--wave) 31% 43%,
+        var(--crest) 44% 50%,
+        var(--wave) 51% 63%,
+        var(--crest) 64% 71%,
+        transparent 71%
+      ),
+      radial-gradient(
+        circle at 100% 50%,
+        var(--crest) 5%,
+        var(--wave) 6% 15%,
+        var(--crest) 16% 20%,
+        var(--wave) 21% 30%,
+        var(--crest) 31% 35%,
+        var(--wave) 36% 45%,
+        var(--crest) 46% 49%,
+        transparent 50%
+      ),
+      radial-gradient(
+        circle at 0 50%,
+        var(--crest) 5%,
+        var(--wave) 6% 15%,
+        var(--crest) 16% 20%,
+        var(--wave) 21% 30%,
+        var(--crest) 31% 35%,
+        var(--wave) 36% 45%,
+        var(--crest) 46% 49%,
+        transparent 50%
+      );
+    background-size: 128px 64px;
+  }
+}
+
 /* Hide scrollbars on horizontal carousels (still scrollable) */
 @utility no-scrollbar {
   scrollbar-width: none;
@@ -244,6 +352,31 @@ html.m9-whisk
 }
 .m9-cursor-dot[data-pressed="true"] {
   scale: 0.7;
+}
+
+/* Hanko: a vermilion seal with a thin inner frame and slightly worn ink. */
+.m9-hanko {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  border-radius: 3px;
+  background-color: var(--color-shu);
+  box-shadow:
+    inset 0 0 0 2px var(--color-shu),
+    inset 0 0 0 3px color-mix(in srgb, var(--color-cream) 75%, transparent);
+  color: var(--color-cream);
+  font-family: var(--font-jp);
+  font-weight: 700;
+  line-height: 1;
+  transform: rotate(-4deg);
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='w'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' seed='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -8 7.2'/%3E%3C/filter%3E%3Crect width='64' height='64' filter='url(%23w)'/%3E%3C/svg%3E");
+  mask-size: 100% 100%;
+}
+.m9-hanko > span {
+  transform: translateY(0.02em);
+}
+.m9-stamp {
+  animation: stamp 700ms var(--ease-calm) 350ms both;
 }
 
 /* Native <details> accordions: hide the default marker */

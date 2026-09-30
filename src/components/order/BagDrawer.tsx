@@ -11,6 +11,7 @@ import { buttonClasses } from "@/components/ui/Button";
 import { useBag } from "./BagProvider";
 import { OpenStatus } from "./OpenStatus";
 import { QuantityStepper } from "./QuantityStepper";
+import { imageSrc } from "@/lib/paths";
 
 /** Slide-over bag for pickup orders. Opened from the header's "Order pickup" button. */
 export function BagDrawer() {
@@ -95,7 +96,7 @@ export function BagDrawer() {
                   >
                     {line.image && (
                       <Image
-                        src={line.image.src}
+                        src={imageSrc(line.image.src)}
                         alt=""
                         fill
                         sizes="80px"
@@ -155,7 +156,7 @@ export function BagDrawer() {
                         <div className="relative size-14 shrink-0 overflow-hidden rounded-md bg-paper">
                           {item.productImage && (
                             <Image
-                              src={item.productImage.src}
+                              src={imageSrc(item.productImage.src)}
                               alt=""
                               fill
                               sizes="56px"
