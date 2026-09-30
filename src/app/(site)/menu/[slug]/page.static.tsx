@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { starterItems } from "@/content/menu";
-import { DemoDrink } from "@/demo/pages/storefront";
+import { DemoDrink } from "@/demo/pages/drink";
 import { drinkMetadata } from "@/lib/drink-metadata";
 
 export const dynamicParams = false;

@@ -11,7 +11,7 @@
     "build": "next build",
     "start": "next start",
     "dev:pages": "next dev",
-    "build:pages": "next build",
+    "build:pages": "next build && node scripts/export-images.mjs",
     "preview:pages": "npx --yes serve@14 out",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",

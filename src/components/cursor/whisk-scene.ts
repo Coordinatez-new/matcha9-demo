@@ -158,9 +158,21 @@ export function mountWhisk(): WhiskHandle | null {
       alpha: true,
       antialias: true,
       powerPreference: "low-power",
+      failIfMajorPerformanceCaveat: true,
     });
   } catch {
-    return null; // No WebGL: keep the normal cursor.
+    return null; // No WebGL, or only a software renderer: keep the normal cursor.
+  }
+  const gl = renderer.getContext();
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  if (
+    info &&
+    /swiftshader|llvmpipe|softpipe|software|basic render/i.test(
+      String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)),
+    )
+  ) {
+    renderer.dispose();
+    return null;
   }
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setSize(CANVAS, CANVAS, false);

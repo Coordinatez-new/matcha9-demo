@@ -9,7 +9,7 @@ export function LoginView({ children, note }: { children: ReactNode; note?: Reac
     <main className="grid min-h-screen place-items-center px-5 py-16">
       <div className="w-full max-w-sm">
         <div className="text-center">
-          <Image src={logo} alt="Matcha 9" className="mx-auto h-16 w-auto" preload />
+          <Image src={logo} alt="Matcha 9" sizes="64px" className="mx-auto h-16 w-auto" preload />
           <h1 className="mt-6 font-display text-4xl">Dashboard</h1>
           <p className="mt-2 text-sm text-ink-soft">Menu, orders and settings for Matcha 9.</p>
         </div>

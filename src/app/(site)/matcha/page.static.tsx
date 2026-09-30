@@ -1,4 +1,4 @@
-import { DemoMatcha } from "@/demo/pages/storefront";
+import { DemoMatcha } from "@/demo/pages/matcha";
 import { pageMetadata } from "@/lib/metadata";
 
 export const metadata = pageMetadata({

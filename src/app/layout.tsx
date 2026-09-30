@@ -17,11 +17,13 @@ const sans = Inter({
   display: "swap",
 });
 
+// The script face only appears further down pages (signatures, the footer), so it isn't preloaded.
 const script = Pinyon_Script({
   subsets: ["latin"],
   weight: "400",
   variable: "--font-pinyon",
   display: "swap",
+  preload: false,
 });
 
 // Japanese accents (kanji and kana): a subset of Shippori Mincho holding only the characters

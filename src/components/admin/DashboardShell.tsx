@@ -36,7 +36,7 @@ export function DashboardShell({
     <div className="lg:grid lg:min-h-screen lg:grid-cols-[16rem_1fr]">
       <aside className="hidden flex-col bg-forest px-4 py-6 text-cream lg:sticky lg:top-0 lg:flex lg:h-screen">
         <Link href="/admin" className="flex items-center gap-3 px-2">
-          <Image src={logoCream} alt="" className="h-10 w-auto" />
+          <Image src={logoCream} alt="" sizes="40px" className="h-10 w-auto" />
           <span>
             <span className="block font-display text-lg tracking-[0.2em] uppercase">Matcha 9</span>
             <span className="block text-[0.7rem] tracking-[0.18em] text-cream/50 uppercase">
@@ -70,7 +70,7 @@ export function DashboardShell({
       <header className="bg-forest px-4 pt-4 pb-3 text-cream lg:hidden">
         <div className="flex items-center justify-between">
           <Link href="/admin" className="flex items-center gap-2.5">
-            <Image src={logoCream} alt="" className="h-8 w-auto" />
+            <Image src={logoCream} alt="" sizes="32px" className="h-8 w-auto" />
             <span className="font-display tracking-[0.2em] uppercase">Dashboard</span>
           </Link>
           {signOutButton("text-sm text-cream/70 hover:text-cream")}

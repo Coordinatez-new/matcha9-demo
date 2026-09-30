@@ -1,7 +1,8 @@
 "use client";
 
-import Image from "next/image";
-import { useEffect, useRef, useState } from "react";
+import { getImageProps } from "next/image";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { preload } from "react-dom";
 import { cn } from "@/lib/cn";
 import { defaultSelections, formatMoney, toOrderable, type MenuItem } from "@/lib/menu";
 import { imageSrc } from "@/lib/paths";
@@ -9,7 +10,16 @@ import { useBag } from "@/components/order/BagProvider";
 import { ArrowLink, ButtonLink, buttonClasses } from "@/components/ui/Button";
 import { CheckIcon } from "@/components/ui/icons";
 import type { AnchorId, DrinkScene, FrameInfo } from "./drink-build/scene";
-import { buildSteps, easeOut, REVEAL_START, span, stepIndexAt } from "./drink-build/timeline";
+import { stillAnchors, stillFrames, stillSize } from "./drink-build/stills";
+import {
+  buildSteps,
+  clamp01,
+  easeInOut,
+  easeOut,
+  REVEAL_START,
+  span,
+  stepIndexAt,
+} from "./drink-build/timeline";
 
 /** The drink the scene builds. Name, copy, price and stock come from the live menu. */
 const SLUG = "pistachio-drip";
@@ -30,14 +40,89 @@ const layerLabels: { id: AnchorId; text: string; jp: string; tone: "ink" | "crea
     { id: "matcha", text: "Ceremonial matcha", jp: "抹茶", tone: "cream", at: 0.6 },
   ];
 
-type Mode = "loading" | "live" | "still" | "flat";
+// The still frames' box is centred on the glass's slot and a little taller than it, the way
+// the 3D camera frames the slot, so frames and scene line up exactly.
+const STILL_SIZES = "(min-width: 1024px) 86vh, 66vh";
+
+function stillImage(src: string) {
+  return getImageProps({
+    src: imageSrc(src),
+    alt: "",
+    width: stillSize.width,
+    height: stillSize.height,
+    sizes: STILL_SIZES,
+  }).props;
+}
+
+type Navigator3D = Navigator & {
+  connection?: { saveData?: boolean; effectiveType?: string };
+  deviceMemory?: number;
+};
+
+/**
+ * A WebGL 2 context for the live 3D, or null when this device should keep the still frames.
+ * Phones and tablets always keep them: the frames are smooth there and cost nothing, where the
+ * 3D would cost battery and risk the browser dropping it under memory pressure. So do data
+ * savers, slow connections, machines with little memory or few cores, and software GPUs.
+ */
+function hardwareContext(canvas: HTMLCanvasElement) {
+  const nav = navigator as Navigator3D;
+  if (window.matchMedia("(pointer: coarse)").matches) return null;
+  if (nav.connection?.saveData) return null;
+  if (/(^|-)2g$|^3g$/.test(nav.connection?.effectiveType ?? "")) return null;
+  if ((nav.deviceMemory ?? 8) < 4 || (nav.hardwareConcurrency ?? 8) < 4) return null;
+  const gl = canvas.getContext("webgl2", {
+    alpha: false,
+    antialias: true,
+    stencil: false,
+    powerPreference: "high-performance",
+    failIfMajorPerformanceCaveat: true,
+  });
+  if (!gl) return null;
+  const info = gl.getExtension("WEBGL_debug_renderer_info");
+  const name = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : "";
+  if (/swiftshader|llvmpipe|softpipe|software|basic render/i.test(name)) {
+    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    return null;
+  }
+  return gl;
+}
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+/** Whether the guest prefers reduced motion (false while rendering on the server). */
+function usePrefersReducedMotion() {
+  return useSyncExternalStore(
+    (onChange) => {
+      const query = window.matchMedia(REDUCED_MOTION);
+      query.addEventListener("change", onChange);
+      return () => query.removeEventListener("change", onChange);
+    },
+    () => window.matchMedia(REDUCED_MOTION).matches,
+    () => false,
+  );
+}
+
+/** Run once the page has loaded and the browser has a quiet moment. */
+function whenSettled(run: () => void) {
+  const idle = () =>
+    typeof window.requestIdleCallback === "function"
+      ? window.requestIdleCallback(run, { timeout: 2500 })
+      : window.setTimeout(run, 600);
+  if (document.readyState === "complete") idle();
+  else window.addEventListener("load", idle, { once: true });
+}
 
 /**
  * The home page's opening: a Pistachio Drip built layer by layer as the guest scrolls, under
- * the site header. The section is pinned for a few screens of scroll while a Three.js scene
- * plays the build; the step rail follows along, and the finished drink gets its layers named.
- * Guests who prefer reduced motion see the finished drink without the pinned scroll, and
- * browsers without WebGL see the drink's photo.
+ * the site header. The section is pinned for a few screens of scroll while the build plays and
+ * the step rail follows along; the finished drink gets its layers named.
+ *
+ * The build first plays as still frames rendered from the 3D scene: they show with the page,
+ * crossfade as you scroll and need no WebGL. Once the page has loaded, capable devices swap in
+ * the live 3D scene, drawing the same frame, so the switch can't be seen. Phones and tablets,
+ * machines that can't keep it smooth, data savers and slow connections keep the frames. Guests
+ * who prefer reduced motion see the finished drink without the pinned scroll.
  */
 export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
   const item = items.find((i) => i.slug === SLUG) ?? null;
@@ -45,57 +130,108 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const slotRef = useRef<HTMLDivElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const railRef = useRef<HTMLSpanElement>(null);
   const barRef = useRef<HTMLSpanElement>(null);
   const hintRef = useRef<HTMLParagraphElement>(null);
-  const labelRefs = useRef<(HTMLElement | null)[]>([]);
+  const frameRefs = useRef<(HTMLImageElement | null)[]>([]);
+  const stillLabelRefs = useRef<(HTMLElement | null)[]>([]);
+  const liveLabelRefs = useRef<(HTMLElement | null)[]>([]);
   const stepRef = useRef(-1);
-  const [mode, setMode] = useState<Mode>("loading");
+  const repaintRef = useRef<() => void>(() => {});
   const [step, setStep] = useState(-1);
-  const [ready, setReady] = useState(false);
+  const [live, setLive] = useState(false);
+  const [framesWanted, setFramesWanted] = useState(false);
+  const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
     const section = sectionRef.current;
     const stage = stageRef.current;
     const canvas = canvasRef.current;
     const slot = slotRef.current;
-    if (!section || !stage || !canvas || !slot) return;
+    const box = boxRef.current;
+    if (!section || !stage || !canvas || !slot || !box) return;
 
-    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // With reduced motion, CSS shows the finished drink with its layers named, and doesn't pin.
+    if (window.matchMedia(REDUCED_MOTION).matches) return;
+
     let scene: DrinkScene | null = null;
     let cancelled = false;
-    let firstFrame = true;
+    let threeD = false;
     let stickyTop = 0;
+    let target = 0;
+    let shown = 0;
+    let raf = 0;
+    let last = 0;
 
-    const onFrame = ({ progress, anchors }: FrameInfo) => {
-      if (firstFrame) {
-        firstFrame = false;
-        setReady(true);
-      }
-      const index = stepIndexAt(progress);
+    const wantFrames = () => setFramesWanted(true);
+
+    // Crossfade the still frames: every frame up to the current one stays under it, so a frame
+    // that hasn't loaded yet simply leaves the last one showing.
+    const paintFrames = (p: number) => {
+      let current = 0;
+      while (current + 1 < stillFrames.length && stillFrames[current + 1]!.at <= p) current++;
+      const next = Math.min(current + 1, stillFrames.length - 1);
+      const from = stillFrames[current]!.at;
+      const to = stillFrames[next]!.at;
+      const blend = next === current ? 0 : easeInOut(span(p, from + (to - from) * 0.3, to));
+      let base = current;
+      while (base > 0 && !loaded(frameRefs.current[base])) base--;
+      frameRefs.current.forEach((img, k) => {
+        if (!img) return;
+        const opacity = k === base || (k > base && k <= current) ? 1 : k === next ? blend : 0;
+        img.style.opacity = String(opacity);
+        img.style.visibility = opacity > 0 && k >= base ? "visible" : "hidden";
+      });
+      const reveal = span(p, REVEAL_START, 1);
+      layerLabels.forEach((label, i) => {
+        const el = stillLabelRefs.current[i];
+        if (el) el.style.opacity = String(easeOut(span(reveal, label.at, label.at + 0.28)));
+      });
+    };
+
+    const paint = (p: number) => {
+      const index = stepIndexAt(p);
       if (index !== stepRef.current) {
         stepRef.current = index;
         setStep(index);
       }
-      const built = span(progress, buildSteps[0]!.start, REVEAL_START);
+      const built = span(p, buildSteps[0]!.start, REVEAL_START);
       if (railRef.current) railRef.current.style.transform = `scaleY(${built})`;
       if (barRef.current) barRef.current.style.transform = `scaleX(${built})`;
-      if (hintRef.current) hintRef.current.style.opacity = String(1 - span(progress, 0.004, 0.035));
+      if (hintRef.current) hintRef.current.style.opacity = String(1 - span(p, 0.004, 0.035));
+      if (!threeD) {
+        paintFrames(p);
+        if (p > 0.004) wantFrames();
+      }
+      scene?.setProgress(p);
+    };
+    repaintRef.current = () => paint(shown);
 
-      const reveal = span(progress, REVEAL_START, 1);
-      layerLabels.forEach((label, i) => {
-        const el = labelRefs.current[i];
-        const at = anchors[label.id];
-        if (!el || !at) return;
-        const shown = easeOut(span(reveal, label.at, label.at + 0.28));
-        el.style.opacity = String(shown);
-        el.style.transform = `translate3d(${at.x}px, ${at.y + (1 - shown) * 10}px, 0) translate(-50%, -50%)`;
-      });
+    // Smooth the scroll position into the progress on screen.
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.25);
+      last = now;
+      shown += (target - shown) * (1 - Math.exp(-dt * 6.5));
+      if (Math.abs(target - shown) < 1e-4) shown = target;
+      paint(shown);
+      raf = shown === target ? 0 : requestAnimationFrame(tick);
+    };
+
+    // 0 when the section reaches the header, 1 when its pinned stretch has scrolled by.
+    const onScroll = () => {
+      const travel = section.offsetHeight - stage.offsetHeight;
+      target = travel > 1 ? clamp01((stickyTop - section.getBoundingClientRect().top) / travel) : 0;
+      if (!raf && target !== shown) {
+        last = performance.now();
+        raf = requestAnimationFrame(tick);
+      }
     };
 
     const measure = () => {
-      if (!scene) return;
       stickyTop = parseFloat(getComputedStyle(stage).top) || 0;
+      onScroll();
+      if (!scene) return;
       const s = stage.getBoundingClientRect();
       const g = slot.getBoundingClientRect();
       scene.setLayout({
@@ -107,12 +243,30 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
       });
     };
 
-    // 0 when the section reaches the header, 1 when its pinned stretch has scrolled by.
-    const onScroll = () => {
-      if (!scene) return;
-      const top = section.getBoundingClientRect().top;
-      const travel = section.offsetHeight - stage.offsetHeight;
-      scene.setProgress(travel > 1 ? (stickyTop - top) / travel : 0);
+    const onFrame = ({ anchors }: FrameInfo) => {
+      if (!threeD) {
+        threeD = true;
+        setLive(true);
+      }
+      layerLabels.forEach((label, i) => {
+        const el = liveLabelRefs.current[i];
+        const at = anchors[label.id];
+        if (!el || !at) return;
+        const reveal = span(shown, REVEAL_START, 1);
+        const on = easeOut(span(reveal, label.at, label.at + 0.28));
+        el.style.opacity = String(on);
+        el.style.transform = `translate3d(${at.x}px, ${at.y + (1 - on) * 10}px, 0) translate(-50%, -50%)`;
+      });
+    };
+
+    // The GPU gave up, or couldn't keep up: back to the frames, for good.
+    const onFail = () => {
+      threeD = false;
+      scene?.destroy();
+      scene = null;
+      setLive(false);
+      wantFrames();
+      paint(shown);
     };
 
     const onPointer = (event: PointerEvent) => {
@@ -125,33 +279,71 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
     };
 
     const resize = new ResizeObserver(measure);
+    resize.observe(stage);
+    resize.observe(slot);
     const visibility = new IntersectionObserver(([entry]) => {
       scene?.setActive(Boolean(entry?.isIntersecting));
     });
+    visibility.observe(section);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    stage.addEventListener("pointermove", onPointer, { passive: true });
+    measure();
+    paint(shown);
 
-    import("./drink-build/scene")
-      .then(({ mountDrinkScene }) => {
+    // The live 3D, once the page has settled, on devices that can carry it.
+    whenSettled(async () => {
+      if (cancelled) return;
+      const context = hardwareContext(canvas);
+      if (!context) {
+        wantFrames();
+        return;
+      }
+      try {
+        const { createDrinkScene } = await import("./drink-build/scene");
         if (cancelled) return;
-        scene = mountDrinkScene(canvas, { still, onFrame });
-        if (!scene) {
-          setMode("flat");
+        const area = stage.clientWidth * stage.clientHeight;
+        const created = await createDrinkScene(canvas, context, {
+          // At most 1.5 device pixels per CSS pixel, and no more than ~2.4 megapixels in all.
+          pixelRatio: Math.max(
+            1,
+            Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(2.4e6 / Math.max(area, 1))),
+          ),
+          transmissionScale: 0.85,
+          onFrame,
+          onFail,
+        });
+        if (cancelled) {
+          created.destroy();
           return;
         }
-        setMode(still ? "still" : "live");
+        scene = created;
         measure();
-        onScroll();
-        resize.observe(stage);
-        resize.observe(slot);
-        visibility.observe(section);
-        window.addEventListener("scroll", onScroll, { passive: true });
-        stage.addEventListener("pointermove", onPointer, { passive: true });
-      })
-      .catch(() => {
-        if (!cancelled) setMode("flat");
-      });
+        scene.setProgress(shown);
+        if (process.env.NODE_ENV !== "production") {
+          // For scripts/render-drink-stills.mjs, which renders the still frames from the scene.
+          (window as Window & { __m9DrinkSnapshot?: unknown }).__m9DrinkSnapshot = (
+            p: number,
+            ratio: number,
+          ) => {
+            const s = stage.getBoundingClientRect();
+            const b = box.getBoundingClientRect();
+            const shot = created.snapshot(p, ratio);
+            return {
+              ...shot,
+              box: { x: b.left - s.left, y: b.top - s.top, width: b.width, height: b.height },
+            };
+          };
+          (window as Window & { __m9DrinkEnvironment?: unknown }).__m9DrinkEnvironment = () =>
+            created.bakeEnvironment();
+        }
+      } catch {
+        if (!cancelled) onFail();
+      }
+    });
 
     return () => {
       cancelled = true;
+      cancelAnimationFrame(raf);
       resize.disconnect();
       visibility.disconnect();
       window.removeEventListener("scroll", onScroll);
@@ -160,23 +352,32 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
     };
   }, []);
 
-  // The pinned scroll grows the section only once the scene is running, and re-measures then.
+  // Frames that mount later, and the live scene's labels once they mount, pick up the current
+  // state.
   useEffect(() => {
-    if (mode === "live") window.dispatchEvent(new Event("scroll"));
-  }, [mode]);
+    repaintRef.current();
+  }, [framesWanted, live]);
 
-  const live = mode === "live";
-  const done = mode === "still" || mode === "flat";
-  const current = done ? buildSteps.length : step;
+  const done = reduced;
+  const current = reduced ? buildSteps.length : step;
   const name = item?.name ?? fallback.name;
   const description = item?.description ?? fallback.description;
-  const photo = item?.productImage ?? null;
+  const poster = stillImage(stillFrames[0]!.src);
+  const finished = stillImage(stillFrames.at(-1)!.src);
+  // The first frame is what the page opens on: fetch it before the body is parsed.
+  preload(poster.src, {
+    as: "image",
+    imageSrcSet: poster.srcSet,
+    imageSizes: poster.sizes,
+    fetchPriority: "high",
+    media: "(prefers-reduced-motion: no-preference)",
+  });
 
   /** Scroll to the moment a step finishes, for the rail's buttons. */
   const jumpTo = (index: number) => {
     const section = sectionRef.current;
     const stage = stageRef.current;
-    if (!section || !stage || !live) return;
+    if (!section || !stage || reduced) return;
     const stepEnd = buildSteps[index]!.end - 0.012;
     const travel = section.offsetHeight - stage.offsetHeight;
     const stickyTop = parseFloat(getComputedStyle(stage).top) || 0;
@@ -187,61 +388,57 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
   return (
     <section
       ref={sectionRef}
+      id="signature"
       aria-labelledby="signature-drink"
-      data-live={live ? "" : undefined}
-      className="relative data-live:h-[470svh] lg:data-live:h-[540svh]"
+      className="relative motion-safe:h-[470svh] lg:motion-safe:h-[540svh]"
     >
+      {/* Without JavaScript nothing plays the build, so don't pin the section. */}
+      <noscript>
+        <style>{"#signature{height:auto}"}</style>
+      </noscript>
       <div
         ref={stageRef}
-        className="sticky top-20 h-[calc(100svh-5rem)] min-h-[36rem] overflow-hidden bg-cream"
+        className="sticky top-20 h-[calc(100svh-5rem)] min-h-[28rem] overflow-hidden bg-cream lg:min-h-[36rem]"
       >
         <canvas
           ref={canvasRef}
           aria-hidden="true"
           className={cn(
-            "absolute inset-0 size-full transition-opacity duration-1000 ease-calm",
-            ready ? "opacity-100" : "opacity-0",
+            "absolute inset-0 size-full transition-opacity duration-700 ease-calm",
+            live ? "opacity-100" : "opacity-0",
           )}
         />
-        {/* The render's background is the page's cream; the same washi grain goes over it. */}
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 [background-image:var(--washi)]"
-        />
 
-        {/* Layer names, positioned from the scene every frame. */}
-        {!(mode === "flat" || mode === "loading") && (
-          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-10">
+        {/* Layer names on the live scene, positioned from it every frame. */}
+        {live && (
+          <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-30">
             {layerLabels.map((label, i) => (
-              <span
+              <LayerLabel
                 key={label.id}
+                label={label}
                 ref={(el) => {
-                  labelRefs.current[i] = el;
+                  liveLabelRefs.current[i] = el;
                 }}
-                className={cn(
-                  "absolute top-0 left-0 flex flex-col items-center text-center whitespace-nowrap opacity-0 will-change-transform",
-                  label.tone === "cream"
-                    ? "text-cream [text-shadow:0_0_14px_rgb(31_39_29/0.55)]"
-                    : "text-moss [text-shadow:0_0_12px_rgb(250_247_242/0.95),0_0_3px_rgb(250_247_242/0.9)]",
-                )}
-              >
-                <span className="text-[0.62rem] font-semibold tracking-[0.24em] uppercase md:text-[0.68rem]">
-                  {label.text}
-                </span>
-                <span
-                  lang="ja"
-                  className="mt-0.5 font-jp text-[0.7rem] tracking-[0.2em] opacity-80"
-                >
-                  {label.jp}
-                </span>
-              </span>
+                className="top-0 left-0 will-change-transform"
+              />
             ))}
           </div>
         )}
 
+        {/* Washi grain over the render and the frames, and leaf shadows falling across both. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-30 [background-image:var(--washi)]"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute top-0 right-0 z-30 h-[85%] w-[75%] bg-cover bg-right-top opacity-60 mix-blend-multiply lg:w-[62%]"
+          style={{ backgroundImage: `url(${imageSrc("/images/drink-build/komorebi.webp")})` }}
+        />
+
         <div className="relative z-20 container-page grid h-full grid-rows-[auto_1fr_auto] gap-4 py-6 lg:grid-cols-12 lg:grid-rows-1 lg:items-center lg:gap-6 lg:py-10">
           {/* The drink */}
-          <div className="lg:col-span-4">
+          <div className="relative z-10 lg:col-span-4">
             <p className="font-display text-xl text-sage-deep italic lg:text-2xl">
               Signature drink
             </p>
@@ -281,20 +478,69 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
             data-cursor="whisk"
             className="relative min-h-0 lg:col-span-5 lg:h-[88%] lg:self-center"
           >
-            {mode === "flat" && photo && (
-              <Image
-                src={imageSrc(photo.src)}
-                alt={item?.productImageAlt ?? ""}
-                width={photo.width}
-                height={photo.height}
-                sizes="(min-width: 1024px) 34vw, 80vw"
-                className="mx-auto h-full w-auto object-contain mix-blend-multiply"
-              />
-            )}
+            <div
+              ref={boxRef}
+              aria-hidden="true"
+              className={cn(
+                "m9-still-fade pointer-events-none absolute top-1/2 left-1/2 aspect-[4/5] h-[124%] -translate-x-1/2 -translate-y-1/2 transition-opacity duration-700 ease-calm",
+                live ? "opacity-0" : "opacity-100",
+              )}
+            >
+              <picture>
+                <source
+                  media="(prefers-reduced-motion: reduce)"
+                  srcSet={finished.srcSet}
+                  sizes={finished.sizes}
+                />
+                <img
+                  {...poster}
+                  alt=""
+                  loading="eager"
+                  fetchPriority="high"
+                  ref={(el) => {
+                    frameRefs.current[0] = el;
+                  }}
+                  className="absolute inset-0 size-full"
+                />
+              </picture>
+              {framesWanted &&
+                stillFrames.slice(1).map((frame, i) => {
+                  const props = stillImage(frame.src);
+                  return (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      key={frame.src}
+                      {...props}
+                      alt=""
+                      loading="eager"
+                      fetchPriority="low"
+                      ref={(el) => {
+                        frameRefs.current[i + 1] = el;
+                      }}
+                      onLoad={() => repaintRef.current()}
+                      className="invisible absolute inset-0 size-full opacity-0"
+                    />
+                  );
+                })}
+              {layerLabels.map((label, i) => (
+                <LayerLabel
+                  key={label.id}
+                  label={label}
+                  ref={(el) => {
+                    stillLabelRefs.current[i] = el;
+                  }}
+                  className="-translate-x-1/2 -translate-y-1/2 motion-reduce:!opacity-100"
+                  style={{
+                    left: `${stillAnchors[label.id][0] * 100}%`,
+                    top: `${stillAnchors[label.id][1] * 100}%`,
+                  }}
+                />
+              ))}
+            </div>
           </div>
 
           {/* The steps: a vertical rail on large screens, a slim bar on phones. */}
-          <div className="lg:col-span-3 lg:justify-self-end">
+          <div className="relative z-10 lg:col-span-3 lg:justify-self-end">
             <ol
               className="relative hidden space-y-5 lg:block"
               aria-label={`How a ${name} is built`}
@@ -318,7 +564,7 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
                     <button
                       type="button"
                       onClick={() => jumpTo(i)}
-                      disabled={!live}
+                      disabled={reduced}
                       aria-current={state === "now" ? "step" : undefined}
                       className="group flex items-center gap-4 text-left disabled:cursor-default"
                     >
@@ -365,16 +611,14 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
                 );
               })}
             </ol>
-            {live && (
-              <p
-                ref={hintRef}
-                aria-hidden="true"
-                className="mt-10 hidden items-center gap-3 pl-[1.9rem] text-[0.62rem] font-semibold tracking-[0.28em] text-sage-deep uppercase lg:flex"
-              >
-                <span className="block h-8 w-px animate-[scroll-cue_2.4s_var(--ease-calm)_infinite] bg-sage-deep/60" />
-                Scroll to build it
-              </p>
-            )}
+            <p
+              ref={hintRef}
+              aria-hidden="true"
+              className="mt-10 hidden items-center gap-3 pl-[1.9rem] text-[0.62rem] font-semibold tracking-[0.28em] text-sage-deep uppercase motion-safe:lg:flex"
+            >
+              <span className="block h-8 w-px animate-[scroll-cue_2.4s_var(--ease-calm)_infinite] bg-sage-deep/60" />
+              Scroll to build it
+            </p>
 
             <div className="lg:hidden">
               <p className="flex items-baseline justify-between gap-4 text-moss">
@@ -405,6 +649,44 @@ export function DrinkBuildHero({ items }: { items: MenuItem[] }) {
         </div>
       </div>
     </section>
+  );
+}
+
+function loaded(img: HTMLImageElement | null | undefined) {
+  return Boolean(img && img.complete && img.naturalWidth > 0);
+}
+
+/** One layer's name, in English and Japanese; positioned by whoever places it. */
+function LayerLabel({
+  label,
+  className,
+  style,
+  ref,
+}: {
+  label: (typeof layerLabels)[number];
+  className?: string;
+  style?: CSSProperties;
+  ref: (el: HTMLSpanElement | null) => void;
+}) {
+  return (
+    <span
+      ref={ref}
+      style={style}
+      className={cn(
+        "absolute flex flex-col items-center text-center whitespace-nowrap opacity-0",
+        label.tone === "cream"
+          ? "text-cream [text-shadow:0_0_14px_rgb(31_39_29/0.55)]"
+          : "text-moss [text-shadow:0_0_12px_rgb(250_247_242/0.95),0_0_3px_rgb(250_247_242/0.9)]",
+        className,
+      )}
+    >
+      <span className="text-[0.62rem] font-semibold tracking-[0.24em] uppercase md:text-[0.68rem]">
+        {label.text}
+      </span>
+      <span lang="ja" className="mt-0.5 font-jp text-[0.7rem] tracking-[0.2em] opacity-80">
+        {label.jp}
+      </span>
+    </span>
   );
 }
 

@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import imageSizes from "./image-sizes.json";
 
 /**
  * One codebase, two builds.
@@ -40,8 +41,12 @@ const preview: NextConfig = {
   trailingSlash: true,
   pageExtensions: ["static.tsx", "static.ts", "tsx", "ts"],
   images: {
-    // Static hosting has no image optimiser; the photos are already web-sized.
-    unoptimized: true,
+    // Static hosting has no image optimiser: scripts/export-images.mjs writes each photo at
+    // these widths after the build, and the loader points srcsets at them.
+    loader: "custom",
+    loaderFile: "./src/lib/image-loader.ts",
+    deviceSizes: imageSizes.deviceSizes,
+    imageSizes: imageSizes.imageSizes,
   },
   env: {
     NEXT_PUBLIC_STATIC_DEMO: "1",

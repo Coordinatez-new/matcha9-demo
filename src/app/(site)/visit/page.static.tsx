@@ -1,4 +1,4 @@
-import { DemoVisit } from "@/demo/pages/storefront";
+import { DemoVisit } from "@/demo/pages/visit";
 import { pageMetadata } from "@/lib/metadata";
 
 export const metadata = pageMetadata({

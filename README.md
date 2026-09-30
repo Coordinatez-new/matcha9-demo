@@ -35,9 +35,17 @@ Both builds render the same screens. Route files ending in `.server.tsx` belong 
 
 The header keeps to **Menu**, **Visit** and **Order pickup**. That button opens the bag, a slide-over with the order, pickup status ("Open now · ready in about 10 minutes" or "Closed right now. Order ahead for tomorrow at 9 am") and checkout. Delivery goes through the Toast ordering page, linked from the bag.
 
-**The home page opens on the Pistachio Drip, built in 3D as you scroll** (Three.js), under the header. The section holds still for a few screens of scrolling while the drink comes together in a fluted glass on a stone coaster: ice drops in, matcha pours from a katakuchi, milk follows and marbles into it, pistachio cream runs down the walls, a crown of foam goes on and roasted pistachio lands on top. Then the camera turns, a ring draws around the glass and each layer is named. A step rail (氷, 抹茶, ミルク…) follows along, and each step can be clicked to jump to it. The glass sits on the page's own cream, with soft leaf shadows (komorebi) on the wall. The drink's name, copy, price and stock come from the menu, so **Add to bag** works as everywhere else. Guests who prefer reduced motion see the finished drink without the pinned scroll; browsers without WebGL see its photo. The scene only draws frames while something moves, compiles its shaders before it appears and lowers its resolution on slow machines. The code is in `src/components/home/drink-build/` (the build's timing is in `timeline.ts`).
+**The home page opens on the Pistachio Drip, built as you scroll**, under the header. The section holds still for a few screens of scrolling while the drink comes together in a fluted glass on a stone coaster: ice drops in, matcha pours from a katakuchi, milk follows and marbles into it, pistachio cream runs down the walls, a crown of foam goes on and roasted pistachio lands on top. Then the camera turns, a ring draws around the glass and each layer is named. A step rail (氷, 抹茶, ミルク…) follows along, and each step can be clicked to jump to it. The glass sits on the page's own cream, with soft leaf shadows (komorebi) across it. The drink's name, copy, price and stock come from the menu, so **Add to bag** works as everywhere else.
 
-On computers with a mouse, the pointer becomes a small **3D bamboo matcha whisk** (Three.js). It trails the pointer on a spring, leans into the direction of travel, and whisks when it passes over a drink. A dot marks the exact click point. Touch screens, visitors who prefer reduced motion and browsers without WebGL keep their normal cursor.
+It is built to load fast and never hold the page up, on every kind of device:
+
+- **Still frames first.** The build is rendered from the 3D scene as nine frames (about 15 KB each). The first one ships with the page and is its main image; the rest load once the page is idle and crossfade as you scroll. No WebGL is needed for this.
+- **Live 3D on desktops and laptops.** Once the page has loaded and gone quiet, capable computers (hardware GPU, 4+ cores and GB of memory, no data saver or slow connection) load Three.js and swap the live scene in on the same frame, so the switch can't be seen. The scene is built in small steps, compiles its shaders in the background, loads a pre-baked lighting environment instead of computing one, has no real-time shadows, draws only while something moves, caps its resolution and lowers it on slow machines, and falls back to the frames if the GPU drops out or can't keep up.
+- **Phones and tablets keep the frames**, which are smooth there and cost nothing in battery. Guests who prefer reduced motion see the finished drink without the pinned scroll.
+
+The code is in `src/components/home/drink-build/` (the build's timing is in `timeline.ts`). After changing the scene, re-render the frames and the baked environment from it: run `npm run dev:pages`, then `node scripts/render-drink-stills.mjs http://localhost:3000` (needs Chrome with a GPU).
+
+On computers with a mouse, the pointer becomes a small **3D bamboo matcha whisk** (Three.js, loaded on the first mouse move). It trails the pointer on a spring, leans into the direction of travel, and whisks when it passes over a drink. A dot marks the exact click point. Touch screens, visitors who prefer reduced motion and browsers without WebGL keep their normal cursor.
 
 **Japanese touches**, kept quiet: bilingual section labels (献立, 点前, 茶会…), a vertical line of Japanese beside the hero and on page intros, a vermilion hanko seal (九, "nine") in the footer and on order pages, the four principles of the tea ceremony on the matcha page, the Japanese names of the tea tools, a faint washi paper grain and seigaiha waves on the dark bands. The Japanese font is a small subset of Shippori Mincho holding only the characters the site uses; after changing any Japanese text, rebuild it with `node scripts/subset-japanese-font.mjs`.
 
@@ -91,21 +99,21 @@ npm run dev
 
 With no `DATABASE_URL`, the first start creates an embedded database in `.data/` and loads the menu. `npm run db:reset` deletes it to start fresh.
 
-| Script                            | What it does                                    |
-| --------------------------------- | ----------------------------------------------- |
-| `npm run dev`                     | Start the dev server (the site)                 |
-| `npm run build` / `npm start`     | Production build and server (the site)          |
-| `npm run dev:pages`               | Dev server for the design preview               |
-| `npm run build:pages`             | Static export of the design preview into `out/` |
-| `npm run preview:pages`           | Serve `out/` locally                            |
-| `npm run lint`                    | ESLint                                          |
-| `npm run typecheck`               | Generate route types and run `tsc`              |
-| `npm run format` / `format:check` | Prettier                                        |
-| `npm run db:reset`                | Delete the local embedded database (`.data/`)   |
+| Script                            | What it does                                                                                                                            |
+| --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `npm run dev`                     | Start the dev server (the site)                                                                                                         |
+| `npm run build` / `npm start`     | Production build and server (the site)                                                                                                  |
+| `npm run dev:pages`               | Dev server for the design preview                                                                                                       |
+| `npm run build:pages`             | Static export of the design preview into `out/`, with every photo exported at each size the pages ask for (`scripts/export-images.mjs`) |
+| `npm run preview:pages`           | Serve `out/` locally                                                                                                                    |
+| `npm run lint`                    | ESLint                                                                                                                                  |
+| `npm run typecheck`               | Generate route types and run `tsc`                                                                                                      |
+| `npm run format` / `format:check` | Prettier                                                                                                                                |
+| `npm run db:reset`                | Delete the local embedded database (`.data/`)                                                                                           |
 
 ## Deploying
 
-**The design preview** deploys itself: every push to `main` builds it and publishes it to GitHub Pages (`.github/workflows/pages.yml`). The base path (`/<repo>`) is detected, so renaming the repository or adding a custom domain needs no code changes.
+**The design preview** deploys itself: every push to `main` builds it and publishes it to GitHub Pages (`.github/workflows/pages.yml`). The base path (`/<repo>`) is detected, so renaming the repository or adding a custom domain needs no code changes. GitHub Pages has no image optimiser, so the build writes each photo at a set of widths (`image-sizes.json`) and `src/lib/image-loader.ts` points the pages' `srcset`s at them: phones download phone-sized photos. The server build uses Next's own optimiser.
 
 **The site** needs a Node.js server. Set these on the host: `ADMIN_EMAIL`, `ADMIN_PASSWORD` and, unless the host has a persistent disk, `DATABASE_URL`. The database tables are created on first start.
 
@@ -136,7 +144,7 @@ src/
   server/                database, migrations, auth, menu, orders, media, Toast (site only)
   proxy.server.ts        sends signed-out visitors from /admin to the sign-in page
 public/images/drinks/    the drink photography the starting menu uses
-scripts/                 subset-japanese-font.mjs
+scripts/                 subset-japanese-font.mjs, export-images.mjs, render-drink-stills.mjs
 ```
 
 ## Content and images

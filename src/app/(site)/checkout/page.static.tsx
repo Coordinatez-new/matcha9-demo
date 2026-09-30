@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DemoCheckout } from "@/demo/pages/storefront";
+import { DemoCheckout } from "@/demo/pages/checkout";
 
 export const metadata: Metadata = {
   title: "Checkout",

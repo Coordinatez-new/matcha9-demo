@@ -1,5 +1,5 @@
 import { starterItems } from "@/content/menu";
-import { DemoMenu } from "@/demo/pages/storefront";
+import { DemoMenu } from "@/demo/pages/menu";
 import { menuDescription } from "@/lib/menu";
 import { pageMetadata } from "@/lib/metadata";
 

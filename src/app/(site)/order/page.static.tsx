@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DemoOrder } from "@/demo/pages/storefront";
+import { DemoOrder } from "@/demo/pages/order";
 
 export const metadata: Metadata = {
   title: "Your order",

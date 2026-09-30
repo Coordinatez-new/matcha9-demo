@@ -15,7 +15,7 @@ export function SiteFooter({ hours, orderHref, orderExternal }: SiteFooterProps)
         <div className="grid gap-14 lg:grid-cols-12">
           <div className="lg:col-span-5">
             <div className="flex items-end gap-5">
-              <Image src={logoCream} alt={site.name} className="h-auto w-28" />
+              <Image src={logoCream} alt={site.name} sizes="112px" className="h-auto w-28" />
               <Hanko className="mb-2 size-10 text-xl" />
             </div>
             <p className="mt-8 font-script text-4xl text-terracotta">{site.motto}</p>

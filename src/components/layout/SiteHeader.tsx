@@ -132,7 +132,7 @@ export function SiteHeader() {
             className="flex items-center gap-3"
             aria-label={`${site.name}, home`}
           >
-            <Image src={logo} alt="" className="h-11 w-auto" preload />
+            <Image src={logo} alt="" sizes="48px" className="h-11 w-auto" preload />
             <span className="font-display text-[1.2rem] font-medium tracking-[0.22em] whitespace-nowrap text-moss uppercase sm:text-[1.35rem] sm:tracking-[0.26em]">
               Matcha 9
             </span>

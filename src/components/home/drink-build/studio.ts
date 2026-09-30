@@ -3,7 +3,10 @@ import {
   BoxGeometry,
   CanvasTexture,
   Color,
+  CubeUVReflectionMapping,
+  DataUtils,
   DoubleSide,
+  LinearFilter,
   Mesh,
   MeshBasicMaterial,
   PlaneGeometry,
@@ -11,8 +14,8 @@ import {
   RepeatWrapping,
   Scene,
   SRGBColorSpace,
+  Texture,
   type Material,
-  type Texture,
   type WebGLRenderer,
 } from "three";
 import { random } from "./helpers";
@@ -23,8 +26,12 @@ import { random } from "./helpers";
  * Reflections for the glass and glaze: a dim room with a tall softbox front left, a strip
  * light behind on the right and a panel overhead. The dark walls are what give clear glass its
  * edges on a pale background, the way a photographer uses black card.
+ *
+ * Filtering the room into an environment map (PMREM) takes the better part of a second on a
+ * phone, so the page loads a baked copy instead (see loadStudioEnvironment); this runs only when
+ * that file is missing, and when scripts/render-drink-stills.mjs bakes it.
  */
-export function studioEnvironment(renderer: WebGLRenderer): Texture {
+export function renderStudioEnvironment(renderer: WebGLRenderer, size = 128) {
   const room = new Scene();
   room.add(
     new Mesh(
@@ -53,7 +60,7 @@ export function studioEnvironment(renderer: WebGLRenderer): Texture {
   panel(40, 14, [0, 24, 0], 1.3);
   panel(12, 26, [8, 2, 38], 0.8);
   const pmrem = new PMREMGenerator(renderer);
-  const texture = pmrem.fromScene(room, 0.02).texture;
+  const target = pmrem.fromScene(room, 0.02, 0.1, 100, { size });
   pmrem.dispose();
   room.traverse((obj) => {
     if (obj instanceof Mesh) {
@@ -61,10 +68,66 @@ export function studioEnvironment(renderer: WebGLRenderer): Texture {
       (obj.material as Material).dispose();
     }
   });
+  return target;
+}
+
+/**
+ * The studio's environment map as an 8-bit sRGB image, scaled so its brightest light is 1:
+ * what scripts/render-drink-stills.mjs saves for the page to load.
+ */
+export function bakeStudioEnvironment(renderer: WebGLRenderer) {
+  const target = renderStudioEnvironment(renderer);
+  const { width, height } = target;
+  const half = new Uint16Array(width * height * 4);
+  renderer.readRenderTargetPixels(target, 0, 0, width, height, half);
+  target.dispose();
+  const values = Float32Array.from(half, (h) => DataUtils.fromHalfFloat(h));
+  let scale = 0;
+  values.forEach((value, i) => {
+    if (i % 4 !== 3) scale = Math.max(scale, value);
+  });
+  const encode = (v: number) => {
+    const x = Math.min(Math.max(v / scale, 0), 1);
+    return Math.round(255 * (x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055));
+  };
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const g = canvas.getContext("2d")!;
+  const data = g.createImageData(width, height);
+  for (let i = 0; i < width * height; i++) {
+    data.data[i * 4] = encode(values[i * 4]!);
+    data.data[i * 4 + 1] = encode(values[i * 4 + 1]!);
+    data.data[i * 4 + 2] = encode(values[i * 4 + 2]!);
+    data.data[i * 4 + 3] = 255;
+  }
+  g.putImageData(data, 0, 0);
+  return { image: canvas.toDataURL("image/png"), scale };
+}
+
+/**
+ * The baked environment map, ready for the materials: decoded off the main thread and used as it
+ * is, with no filtering to do. Its values run 0..1; materials multiply by the baked scale.
+ */
+export async function loadStudioEnvironment(url: string) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`${url}: ${response.status}`);
+  const bitmap = await createImageBitmap(await response.blob(), {
+    premultiplyAlpha: "none",
+    colorSpaceConversion: "none",
+  });
+  const texture = new Texture(bitmap);
+  texture.mapping = CubeUVReflectionMapping;
+  texture.colorSpace = SRGBColorSpace;
+  texture.minFilter = LinearFilter;
+  texture.magFilter = LinearFilter;
+  texture.generateMipmaps = false;
+  texture.flipY = false;
+  texture.needsUpdate = true;
   return texture;
 }
 
-/** A soft round shadow for under the coaster. */
+/** A soft round shadow: under the coaster, and stretched out as the drink's own shadow. */
 export function radialTexture() {
   const size = 128;
   const canvas = document.createElement("canvas");
@@ -83,21 +146,6 @@ export function radialTexture() {
   return texture;
 }
 
-/** One leaf, as an alpha mask for the shadow casters. */
-export function leafMask() {
-  const canvas = document.createElement("canvas");
-  canvas.width = 64;
-  canvas.height = 128;
-  const g = canvas.getContext("2d")!;
-  g.fillStyle = "#fff";
-  g.beginPath();
-  g.moveTo(32, 126);
-  g.bezierCurveTo(2, 96, 4, 34, 32, 2);
-  g.bezierCurveTo(60, 34, 62, 96, 32, 126);
-  g.fill();
-  return new CanvasTexture(canvas);
-}
-
 /** Fine foam bubbles for the crown's bump map. */
 export function bubbleTexture() {
   const size = 256;
@@ -108,17 +156,17 @@ export function bubbleTexture() {
   g.fillStyle = "#808080";
   g.fillRect(0, 0, size, size);
   const rand = random(5);
-  for (let i = 0; i < 900; i++) {
+  for (let i = 0; i < 600; i++) {
     const x = rand() * size;
     const y = rand() * size;
     const r = 0.6 + rand() ** 3 * 3.2;
-    for (const [dx, dy] of [
-      [0, 0],
-      [size, 0],
-      [-size, 0],
-      [0, size],
-      [0, -size],
-    ] as const) {
+    // Bubbles near an edge are drawn again on the far side, so the texture tiles seamlessly.
+    const copies: [number, number][] = [[0, 0]];
+    if (x < r) copies.push([size, 0]);
+    if (x > size - r) copies.push([-size, 0]);
+    if (y < r) copies.push([0, size]);
+    if (y > size - r) copies.push([0, -size]);
+    for (const [dx, dy] of copies) {
       const grad = g.createRadialGradient(x + dx, y + dy, 0, x + dx, y + dy, r);
       grad.addColorStop(0, "rgba(255,255,255,0.5)");
       grad.addColorStop(0.7, "rgba(255,255,255,0.15)");

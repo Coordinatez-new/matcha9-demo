@@ -374,6 +374,19 @@ html.m9-whisk
   scale: 0.7;
 }
 
+/* The home page's still frames fade out at their edges, so neither the frame nor the drink's
+   shadow ever ends in a hard line on the page. */
+.m9-still-fade {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent, #000 8%, #000 92%, transparent),
+    linear-gradient(to bottom, transparent, #000 3%, #000 86%, transparent);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent, #000 8%, #000 92%, transparent),
+    linear-gradient(to bottom, transparent, #000 3%, #000 86%, transparent);
+  mask-composite: intersect;
+}
+
 /* Hanko: a vermilion seal with a thin inner frame and slightly worn ink. */
 .m9-hanko {
   display: inline-grid;

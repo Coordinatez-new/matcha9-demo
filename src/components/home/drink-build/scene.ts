@@ -1,37 +1,33 @@
 import {
-  BufferGeometry,
   Color,
   CylinderGeometry,
   DirectionalLight,
   DoubleSide,
   Euler,
   Group,
+  HalfFloatType,
   HemisphereLight,
   IcosahedronGeometry,
   InstancedMesh,
   Matrix4,
   Mesh,
   MeshBasicMaterial,
-  MeshDepthMaterial,
   MeshPhysicalMaterial,
   MeshStandardMaterial,
   NeutralToneMapping,
-  Object3D,
   PerspectiveCamera,
   PlaneGeometry,
   Quaternion,
-  RGBADepthPacking,
   Scene,
-  ShadowMaterial,
   SpotLight,
   SRGBColorSpace,
   TorusGeometry,
   Vector3,
-  VSMShadowMap,
   WebGLRenderer,
+  WebGLRenderTarget,
+  type Texture,
 } from "three";
 import { RoundedBoxGeometry } from "three/addons/geometries/RoundedBoxGeometry.js";
-import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import {
   lerp,
   noiseGlsl,
@@ -42,7 +38,15 @@ import {
   weldSeam,
   type ProfilePoint,
 } from "./helpers";
-import { bubbleTexture, leafMask, radialTexture, studioEnvironment } from "./studio";
+import { imageSrc } from "@/lib/paths";
+import {
+  bakeStudioEnvironment,
+  bubbleTexture,
+  loadStudioEnvironment,
+  radialTexture,
+  renderStudioEnvironment,
+} from "./studio";
+import { bakedEnvironment } from "./stills";
 import { clamp01, easeIn, easeInOut, easeOut, REVEAL_START, span, stepProgress } from "./timeline";
 
 /**
@@ -52,8 +56,10 @@ import { clamp01, easeIn, easeInOut, easeOut, REVEAL_START, span, stepProgress }
  * build plays backwards as smoothly as forwards.
  *
  * Units are centimetres. The drink group's local y is the height above the foot of the glass.
- * The background is the page's own cream: the floor and wall only catch shadows, so the scene
- * sits on the page like a photograph on paper, with leaves from somewhere off-frame dappling it.
+ * The background is the page's own cream. There are no real-time shadows: a soft decal under the
+ * glass stretches as it fills, and the leaf shadows are an image on the page, so the scene stays
+ * light enough for laptops and phones. The same scene renders the still frames the page shows
+ * first (scripts/render-drink-stills.mjs).
  */
 
 // ── The glass, from the real one at the bar: tall, tapered, fluted, with a thick base ───────
@@ -75,9 +81,12 @@ const MATCHA_TOP = 4.6; // the deep green layer at the bottom
 const MILK_TOP = 13.6; // milk line, just under the foam
 const DOME = 1.55; // how far the foam crowns above the rim
 const LIP_X = 1.35; // where the katakuchi's lip hangs while it pours
-const LIP_Y = 19.4;
+const LIP_Y = 18.6;
 const RING_R = 6.2;
 const RING_Y = 6.6;
+
+// The key light's direction across the floor, for the shadow decal: away from the light.
+const SHADOW_DIR = new Vector3(44, 0, -62).normalize();
 
 const palette = {
   page: new Color("#f5f0ea"),
@@ -143,15 +152,22 @@ function unitColumn(capRings: number) {
   return revolve(pts, 96);
 }
 
+/** Give the browser a turn between build steps, so building the scene never blocks input. */
+function pause() {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<void> } }).scheduler;
+  if (scheduler?.yield) return scheduler.yield();
+  return new Promise<void>((resolve) => setTimeout(resolve, 0));
+}
+
 // ── The scene ────────────────────────────────────────────────────────────────────────────
 
 export type AnchorId = "finish" | "foam" | "pistachio" | "milk" | "matcha";
 
+export type Anchors = Record<AnchorId, { x: number; y: number }>;
+
 export type FrameInfo = {
-  /** The smoothed progress actually on screen. */
-  progress: number;
   /** Canvas-pixel positions for the HTML labels. */
-  anchors: Record<AnchorId, { x: number; y: number }>;
+  anchors: Anchors;
 };
 
 export type Layout = {
@@ -163,109 +179,76 @@ export type Layout = {
   slotHeight: number;
 };
 
+export type SceneOptions = {
+  /** Device pixels per CSS pixel to draw at; lowered further if frames run slow. */
+  pixelRatio: number;
+  /** Resolution of the pass the glass refracts, as a fraction of the canvas. */
+  transmissionScale: number;
+  onFrame: (info: FrameInfo) => void;
+  /** The GPU dropped the context, or frames stayed slow at the lowest resolution. */
+  onFail: () => void;
+};
+
 export type DrinkScene = {
+  /** The build's progress to draw, 0..1 (the page smooths the scroll). */
   setProgress: (p: number) => void;
   setLayout: (layout: Layout) => void;
   setPointer: (x: number, y: number) => void;
   setActive: (active: boolean) => void;
+  /** Draw the build at p right now and return the frame as a PNG data URL, with its anchors. */
+  snapshot: (p: number, pixelRatio: number) => { image: string; anchors: Anchors };
+  /** Render the studio's environment map afresh, as a PNG data URL and its scale. */
+  bakeEnvironment: () => { image: string; scale: number };
   destroy: () => void;
 };
 
-export function mountDrinkScene(
+/**
+ * Build the scene in small steps, compile its shaders off the main thread where the browser
+ * can, and resolve once the first frame has been drawn. Rejects if WebGL can't be used.
+ */
+export async function createDrinkScene(
   canvas: HTMLCanvasElement,
-  options: { still: boolean; onFrame: (info: FrameInfo) => void },
-): DrinkScene | null {
-  let renderer: WebGLRenderer;
-  try {
-    renderer = new WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
-  } catch {
-    return null;
-  }
-  const { still, onFrame } = options;
-  const small = window.matchMedia("(max-width: 767px)").matches;
-  let pixelRatio = Math.min(window.devicePixelRatio || 1, small ? 1.5 : 1.6);
+  context: WebGL2RenderingContext,
+  options: SceneOptions,
+): Promise<DrinkScene> {
+  const { onFrame, onFail } = options;
+  const renderer = new WebGLRenderer({ canvas, context });
+  let pixelRatio = options.pixelRatio;
   renderer.setPixelRatio(pixelRatio);
   renderer.outputColorSpace = SRGBColorSpace;
   renderer.toneMapping = NeutralToneMapping;
   renderer.toneMappingExposure = 1;
   // Shader info logs (harmless precision notes from Windows' D3D compiler) only in development.
   renderer.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = VSMShadowMap;
-  // Shadows are redrawn only when the drink changes (see render), not every frame.
-  renderer.shadowMap.autoUpdate = false;
   renderer.setClearColor(palette.page);
-  if (small) renderer.transmissionResolutionScale = 0.75;
+  renderer.transmissionResolutionScale = options.transmissionScale;
 
   const scene = new Scene();
-  const environment = studioEnvironment(renderer);
+  // The baked environment map; filtering one here is the slow path, for when it's missing.
+  let environment: Texture;
+  let envScale = bakedEnvironment.scale;
+  try {
+    environment = await loadStudioEnvironment(imageSrc(bakedEnvironment.src));
+  } catch {
+    environment = renderStudioEnvironment(renderer).texture;
+    envScale = 1;
+  }
   const time = { value: 0 };
   const disposables: { dispose: () => void }[] = [environment];
   const lit = <M extends MeshStandardMaterial>(material: M, intensity: number) => {
     material.envMap = environment;
-    material.envMapIntensity = intensity;
+    material.envMapIntensity = intensity * envScale;
     return material;
   };
+  await pause();
 
-  // ── Studio: the page itself, a stone coaster, dappled light through leaves ──────────────
-  // The floor stops short of the wall (where two shadow catchers cross, soft shadows draw a
-  // seam) and fades out before its far edge, so shadows never end in a line.
-  const floor = new Mesh(
-    new PlaneGeometry(240, 72),
-    patch(
-      new ShadowMaterial({ color: palette.shadow, opacity: 0.17 }),
-      "m9-floor",
-      {},
-      (shader) => {
-        shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nvarying vec3 vFloor;")
-          .replace(
-            "#include <worldpos_vertex>",
-            "#include <worldpos_vertex>\nvFloor = (modelMatrix * vec4(transformed, 1.0)).xyz;",
-          );
-        shader.fragmentShader = shader.fragmentShader
-          .replace("#include <common>", "#include <common>\nvarying vec3 vFloor;")
-          .replace(
-            "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );",
-            "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) * ( 1.0 - smoothstep( 16.0, 29.0, -vFloor.z ) ) );",
-          );
-      },
-    ),
-  );
-  floor.rotation.x = -Math.PI / 2;
-  floor.position.z = 4;
-  floor.receiveShadow = true;
-  // The wall's shadows fade out towards the floor, so the two never meet in a line.
-  const backdrop = new Mesh(
-    new PlaneGeometry(400, 300),
-    patch(
-      new ShadowMaterial({ color: palette.shadow, opacity: 0.085 }),
-      "m9-wall",
-      {},
-      (shader) => {
-        shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", "#include <common>\nvarying vec3 vWall;")
-          .replace(
-            "#include <worldpos_vertex>",
-            "#include <worldpos_vertex>\nvWall = (modelMatrix * vec4(transformed, 1.0)).xyz;",
-          );
-        shader.fragmentShader = shader.fragmentShader
-          .replace("#include <common>", "#include <common>\nvarying vec3 vWall;")
-          .replace(
-            "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) );",
-            "gl_FragColor = vec4( color, opacity * ( 1.0 - getShadowMask() ) * smoothstep( 3.0, 16.0, vWall.y ) );",
-          );
-      },
-    ),
-  );
-  backdrop.position.set(0, 144, -34);
-  backdrop.receiveShadow = true;
-  scene.add(floor, backdrop);
-
+  // ── Studio: a stone coaster on the page, with soft shadows under it ──────────────────────
+  const soft = radialTexture();
+  disposables.push(soft);
   const contact = new Mesh(
     new PlaneGeometry(16, 16),
     new MeshBasicMaterial({
-      map: radialTexture(),
+      map: soft,
       color: palette.shadow,
       transparent: true,
       opacity: 0.4,
@@ -275,6 +258,20 @@ export function mountDrinkScene(
   contact.rotation.x = -Math.PI / 2;
   contact.position.y = 0.02;
   scene.add(contact);
+
+  // The drink's own shadow, cast away from the key light: faint for the empty glass, longer and
+  // deeper as it fills.
+  const castMaterial = new MeshBasicMaterial({
+    map: soft,
+    color: palette.shadow,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+  });
+  const cast = new Mesh(new PlaneGeometry(1, 1), castMaterial);
+  cast.rotation.set(-Math.PI / 2, 0, Math.atan2(-SHADOW_DIR.x, -SHADOW_DIR.z));
+  cast.position.y = 0.015;
+  scene.add(cast);
 
   const coaster = new Mesh(
     revolve(
@@ -309,74 +306,19 @@ export function mountDrinkScene(
       },
     ),
   );
-  coaster.castShadow = true;
-  coaster.receiveShadow = true;
   scene.add(coaster);
 
-  // Light: a warm key high on the left (it also casts the leaf shadows), a sky fill and a cool
-  // rim from behind that picks out the edges of the glass.
+  // Light: a warm key high on the left, a sky fill and a cool rim from behind that picks out
+  // the edges of the glass.
   const key = new SpotLight(new Color("#fff3e2"), 3.4, 0, 0.42, 0.9, 0);
   key.position.set(-44, 80, 62);
   key.target.position.set(0, 7, -14);
-  key.castShadow = true;
-  key.shadow.mapSize.set(1024, 1024);
-  key.shadow.camera.near = 30;
-  key.shadow.camera.far = 220;
-  key.shadow.radius = 6;
-  key.shadow.blurSamples = 10;
-  key.shadow.bias = -0.0004;
   scene.add(key, key.target);
   scene.add(new HemisphereLight(new Color("#fff8ee"), new Color("#cfc3b0"), 0.55));
   const rim = new DirectionalLight(new Color("#eef2ff"), 1.1);
   rim.position.set(30, 22, -40);
   scene.add(rim);
-
-  // Komorebi: leaves somewhere between the light and the wall, merged into one mesh that writes
-  // neither colour nor depth. It never shows; it only casts.
-  {
-    const mask = leafMask();
-    disposables.push(mask);
-    // The shadow pass takes map and alphaTest from the caster's own material.
-    const hidden = new MeshBasicMaterial({
-      map: mask,
-      alphaTest: 0.5,
-      side: DoubleSide,
-      colorWrite: false,
-      depthWrite: false,
-    });
-    const rand = random(13);
-    const light = key.position;
-    const leaf = new Object3D();
-    const parts: BufferGeometry[] = [];
-    const toward = [
-      [-30, 30],
-      [-24, 12],
-      [26, 32],
-      [34, 14],
-      [4, 40],
-    ] as const;
-    for (const [wx, wy] of toward) {
-      const centre = light.clone().lerp(new Vector3(wx, wy, -34), 0.6);
-      for (let k = 0; k < 16; k++) {
-        const size = 1 + rand() * 0.9;
-        leaf.scale.set(size, size, 1);
-        leaf.position.set(
-          centre.x + (rand() - 0.5) * 15,
-          centre.y + (rand() - 0.5) * 13,
-          centre.z + (rand() - 0.5) * 6,
-        );
-        leaf.lookAt(light);
-        leaf.rotateZ(rand() * Math.PI * 2);
-        leaf.rotateX((rand() - 0.5) * 0.9);
-        leaf.updateMatrix();
-        parts.push(new PlaneGeometry(1, 2).applyMatrix4(leaf.matrix));
-      }
-    }
-    const leaves = new Mesh(mergeGeometries(parts), hidden);
-    parts.forEach((part) => part.dispose());
-    leaves.castShadow = true;
-    scene.add(leaves);
-  }
+  await pause();
 
   // ── The drink ──────────────────────────────────────────────────────────────────────────
   const drink = new Group();
@@ -403,6 +345,7 @@ export function mountDrinkScene(
   );
   glass.renderOrder = 2;
   drink.add(glass);
+  await pause();
 
   // Liquid: one column that the vertex shader fits to the glass between the base and the
   // current level. Colour comes from the layers: matcha settled at the bottom, milk above,
@@ -421,21 +364,6 @@ export function mountDrinkScene(
     uMatchaMid: { value: palette.matchaMid },
     uMilk: { value: palette.milk },
   };
-  const liquidVertexHead = /* glsl */ `
-    uniform float uBase;
-    uniform float uLevel;
-    uniform float uR0;
-    uniform float uTaper;
-    uniform float uRipple;
-    uniform vec2 uRippleAt;
-    uniform float uTime;
-    varying vec3 vDrink;
-    vec3 m9Column(vec3 p) {
-      float h = mix(uBase, uLevel, p.y);
-      float r = uR0 + uTaper * h;
-      return vec3(p.x * r, h, p.z * r);
-    }
-  `;
   const liquid = new Mesh(
     unitColumn(28),
     patch(
@@ -444,12 +372,25 @@ export function mountDrinkScene(
       liquidUniforms,
       (shader) => {
         shader.vertexShader = shader.vertexShader
-          .replace("#include <common>", `#include <common>\n${liquidVertexHead}`)
+          .replace(
+            "#include <common>",
+            /* glsl */ `#include <common>
+            uniform float uBase;
+            uniform float uLevel;
+            uniform float uR0;
+            uniform float uTaper;
+            uniform float uRipple;
+            uniform vec2 uRippleAt;
+            uniform float uTime;
+            varying vec3 vDrink;`,
+          )
           .replace(
             "#include <beginnormal_vertex>",
             /* glsl */ `
             vec3 objectNormal = vec3(normal);
-            vec3 m9Pos = m9Column(position);
+            float m9h = mix(uBase, uLevel, position.y);
+            float m9r = uR0 + uTaper * m9h;
+            vec3 m9Pos = vec3(position.x * m9r, m9h, position.z * m9r);
             if (position.y > 0.999 && normal.y > 0.5) {
               vec2 q = m9Pos.xz - uRippleAt;
               float d = length(q);
@@ -496,19 +437,6 @@ export function mountDrinkScene(
       },
     ),
   );
-  liquid.castShadow = true;
-  liquid.receiveShadow = true;
-  liquid.customDepthMaterial = patch(
-    new MeshDepthMaterial({ depthPacking: RGBADepthPacking }),
-    "m9-liquid-depth",
-    liquidUniforms,
-    (shader) => {
-      shader.vertexShader = shader.vertexShader
-        .replace("#include <common>", `#include <common>\n${liquidVertexHead}`)
-        .replace("#include <begin_vertex>", "vec3 transformed = m9Column(position);");
-    },
-  );
-  disposables.push(liquid.customDepthMaterial);
   drink.add(liquid);
 
   // Pistachio cream on the inside of the glass: a ring at the rim and thin drips running down.
@@ -580,6 +508,7 @@ export function mountDrinkScene(
   );
   dripShell.visible = false;
   drink.add(dripShell);
+  await pause();
 
   // Ice: five cubes that fall in one after another and stack up.
   const iceGeometry = new RoundedBoxGeometry(2.25, 2.15, 2.25, 4, 0.42);
@@ -631,6 +560,7 @@ export function mountDrinkScene(
   const ice = iceRest.map(() => {
     const cube = new Mesh(iceGeometry, iceMaterial);
     cube.renderOrder = 1;
+    cube.visible = false;
     drink.add(cube);
     return cube;
   });
@@ -690,6 +620,7 @@ export function mountDrinkScene(
   const matchaStream = makeStream(palette.matchaPour, 0.3, 0.2);
   const milkStream = makeStream(palette.milk, 0.34, 0.22);
   const foamStream = makeStream(palette.foam, 0.6, 0.8);
+  await pause();
 
   // Foam: fills the top of the glass and crowns just above the rim.
   const bubbles = bubbleTexture();
@@ -722,8 +653,6 @@ export function mountDrinkScene(
     ),
   );
   foam.position.y = foamBase;
-  foam.castShadow = true;
-  foam.receiveShadow = true;
   foam.visible = false;
   drink.add(foam);
   const foamTopAt = (r: number) => {
@@ -760,7 +689,6 @@ export function mountDrinkScene(
   const nutMaterial = lit(new MeshStandardMaterial({ roughness: 0.66, flatShading: true }), 0.6);
   const NUTS = 17;
   const nuts = new InstancedMesh(nutGeometry, nutMaterial, NUTS);
-  nuts.castShadow = true;
   const nutPlan = (() => {
     const rand = random(21);
     return Array.from({ length: NUTS }, (_, i) => {
@@ -781,7 +709,9 @@ export function mountDrinkScene(
       };
     });
   })();
+  nuts.visible = false;
   drink.add(nuts);
+  await pause();
 
   // The katakuchi: a lipped pouring bowl in a deep moss glaze, tipping in from above.
   const bowl = new Group();
@@ -905,22 +835,21 @@ export function mountDrinkScene(
   const pointer = { x: 0, y: 0, sx: 0, sy: 0 };
 
   // ── State ──────────────────────────────────────────────────────────────────────────────
-  let target = still ? 1 : 0;
-  let shown = target;
+  let shown = 0;
   let active = true;
   let frame = 0;
   let last = performance.now();
   let slowFrames = 0;
-  let shadowsFor = Number.NaN;
-  let warmed = false;
   let destroyed = false;
+  let failed = false;
+  let ready = false;
   let running = false; // whether the previous frame came from the loop, for timing
   const m = new Matrix4();
   const q = new Quaternion();
   const e = new Euler();
   const v = new Vector3();
   const sc = new Vector3();
-  const anchors = {} as FrameInfo["anchors"];
+  const anchors = {} as Anchors;
 
   function apply(p: number, t: number) {
     // Ice ─────────────────────────────────────────────────────────────
@@ -1016,6 +945,14 @@ export function mountDrinkScene(
       lerp(foamBase, GLASS_H + DOME, grow),
     );
 
+    // The drink's shadow grows with what's in the glass.
+    const filled = clamp01((level - BASE) / (MILK_TOP - BASE));
+    const height = level - BASE + grow * DOME * 1.5;
+    const length = 4 + height * 0.95;
+    castMaterial.opacity = 0.08 + 0.34 * filled + 0.04 * grow;
+    cast.scale.set(9, length, 1);
+    cast.position.set(SHADOW_DIR.x * (length / 2 - 1), 0.015, SHADOW_DIR.z * (length / 2 - 1));
+
     // Roasted pistachio ────────────────────────────────────────────────────
     const pN = stepProgress(p, "finish");
     nuts.visible = pN > 0;
@@ -1067,14 +1004,13 @@ export function mountDrinkScene(
       riders.instanceMatrix.needsUpdate = true;
     }
 
-    // Camera: a slow push in while it's built, a turn around the glass at the end, and a
-    // lift while the katakuchi is in frame.
-    const pour = Math.sin(Math.PI * span(pM, 0.05, 0.95));
+    // Camera: a slow push in while it's built and a turn around the glass at the end. It holds
+    // its height, so the still frames (rendered from this) line up when they crossfade.
     const turn = easeInOut(pR);
     const azimuth = turn * 0.42 + pointer.sx * 0.05;
-    const elevation = 0.1 + turn * 0.07 + pointer.sy * 0.03;
-    const frameHeight = lerp(21.5, 20.5, easeInOut(span(p, 0, REVEAL_START))) + pour * 4.5;
-    const lookY = 9.3 + pour * 2.4 + turn * 0.4;
+    const elevation = 0.1 + pointer.sy * 0.03;
+    const frameHeight = lerp(21.5, 20.5, easeInOut(span(p, 0, REVEAL_START)));
+    const lookY = 9.3;
     const fovRad = (camera.fov * Math.PI) / 180;
     const distance =
       (frameHeight / (2 * Math.tan(fovRad / 2))) * (layout.height / Math.max(layout.slotHeight, 1));
@@ -1087,33 +1023,14 @@ export function mountDrinkScene(
     return azimuth;
   }
 
+  const front = new Vector3();
   function project(id: AnchorId, local: Vector3) {
     v.copy(local);
     drink.localToWorld(v);
     v.project(camera);
     anchors[id] = { x: ((v.x + 1) / 2) * layout.width, y: ((1 - v.y) / 2) * layout.height };
   }
-
-  const front = new Vector3();
-  /** Draw one frame. Returns whether anything is still moving, i.e. whether to keep going. */
-  function render(now: number) {
-    // Smooth towards the scroll position; a long gap (a hidden tab) just catches up.
-    const gap = (now - last) / 1000;
-    const dt = Math.min(gap, 0.25);
-    last = now;
-    const t = now / 1000;
-    time.value = t;
-    shown += (target - shown) * (1 - Math.exp(-dt * 6.5));
-    if (Math.abs(target - shown) < 1e-4) shown = target;
-    pointer.sx += (pointer.x - pointer.sx) * (1 - Math.exp(-dt * 3));
-    pointer.sy += (pointer.y - pointer.sy) * (1 - Math.exp(-dt * 3));
-    const azimuth = apply(shown, t);
-    if (shown !== shadowsFor) {
-      renderer.shadowMap.needsUpdate = true;
-      shadowsFor = shown;
-    }
-    renderer.render(scene, camera);
-
+  function projectAnchors(azimuth: number) {
     const onFront = (y: number, inset = 0) =>
       front.set(
         Math.sin(azimuth) * (innerR(y) - inset),
@@ -1125,23 +1042,46 @@ export function mountDrinkScene(
     project("pistachio", onFront(GLASS_H - 2.2));
     project("milk", onFront(9.4));
     project("matcha", onFront(2.9));
-    onFrame({ progress: shown, anchors });
+  }
 
-    // Adapt to slower machines: drop the pixel ratio if frames keep running long (the first
-    // frame after a rest doesn't count).
-    if (running && gap > 0.028) slowFrames++;
+  function fail() {
+    if (failed) return;
+    failed = true;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    onFail();
+  }
+
+  /** Draw one frame. Returns whether anything is still moving, i.e. whether to keep going. */
+  function render(now: number) {
+    const gap = (now - last) / 1000;
+    last = now;
+    const t = now / 1000;
+    time.value = t;
+    pointer.sx += (pointer.x - pointer.sx) * (1 - Math.exp(-Math.min(gap, 0.25) * 3));
+    pointer.sy += (pointer.y - pointer.sy) * (1 - Math.exp(-Math.min(gap, 0.25) * 3));
+    const azimuth = apply(shown, t);
+    renderer.render(scene, camera);
+    projectAnchors(azimuth);
+    onFrame({ anchors });
+
+    // Adapt to slower machines: drop the pixel ratio while frames keep running long (the first
+    // frame after a rest doesn't count), and give up on the 3D if even that doesn't help.
+    if (running && gap > 0.034) slowFrames++;
     else slowFrames = Math.max(0, slowFrames - 1);
-    if (slowFrames > 24 && pixelRatio > 1) {
+    if (slowFrames > 24) {
+      slowFrames = 0;
+      if (pixelRatio <= 1) {
+        fail();
+        return false;
+      }
       pixelRatio = Math.max(1, pixelRatio - 0.25);
       renderer.setPixelRatio(pixelRatio);
       renderer.setSize(layout.width, layout.height, false);
-      slowFrames = 0;
     }
 
     const settling =
-      shown !== target ||
-      Math.abs(pointer.x - pointer.sx) > 1e-3 ||
-      Math.abs(pointer.y - pointer.sy) > 1e-3;
+      Math.abs(pointer.x - pointer.sx) > 1e-3 || Math.abs(pointer.y - pointer.sy) > 1e-3;
     const flowing =
       matchaStream.mesh.visible ||
       milkStream.mesh.visible ||
@@ -1153,19 +1093,15 @@ export function mountDrinkScene(
   // Frames are drawn only while something moves: scrolling, the pointer, a pour or the ring.
   function loop(now: number) {
     frame = 0;
-    if (!active) return;
+    if (!active || failed) return;
     running = render(now);
     if (running) frame = requestAnimationFrame(loop);
   }
 
   function wake() {
-    if (frame || !active || !warmed) return;
+    if (frame || !active || !ready || failed) return;
     last = performance.now();
     running = false;
-    if (still) {
-      render(last);
-      return;
-    }
     frame = requestAnimationFrame(loop);
   }
 
@@ -1187,41 +1123,59 @@ export function mountDrinkScene(
 
   const onContextLost = (event: Event) => {
     event.preventDefault();
-    cancelAnimationFrame(frame);
-    frame = 0;
+    fail();
   };
   canvas.addEventListener("webglcontextlost", onContextLost);
 
-  // Compile every shader before the first frame, so nothing stalls the first time a part of the
-  // drink appears mid-scroll: the materials in parallel where the browser allows, then one
-  // unseen frame with every part shown, which warms up the shadow pass as well.
-  const warmUp = () => {
-    if (destroyed) return;
-    apply(1, 0);
-    const revealed: Object3D[] = [];
+  function destroy() {
+    destroyed = true;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    canvas.removeEventListener("webglcontextlost", onContextLost);
     scene.traverse((obj) => {
-      if (!obj.visible) {
-        obj.visible = true;
-        revealed.push(obj);
+      if (obj instanceof Mesh) {
+        obj.geometry.dispose();
+        (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach((mat) =>
+          mat.dispose(),
+        );
       }
     });
-    renderer.shadowMap.needsUpdate = true;
-    renderer.render(scene, camera);
-    revealed.forEach((obj) => (obj.visible = false));
-    warmed = true;
-    wake();
-  };
-  renderer.compileAsync(scene, camera).then(warmUp, warmUp);
+    disposables.forEach((d) => d.dispose());
+    renderer.dispose();
+  }
 
+  // Compile every shader before the first frame, one part at a time. Each part needs two
+  // versions: one for the screen and one for the pass the glass refracts (drawn to a texture,
+  // without tone mapping). Where the browser compiles in parallel, this all happens off the main
+  // thread; elsewhere each part is its own short task.
+  const parts: Mesh[] = [];
+  scene.traverse((obj) => {
+    if (obj instanceof Mesh) parts.push(obj);
+  });
+  const refracted = new WebGLRenderTarget(4, 4, { type: HalfFloatType });
+  for (const part of parts) {
+    renderer.compile(part, camera, scene);
+    if (!part.material || !(part.material as MeshPhysicalMaterial).transmission) {
+      renderer.setRenderTarget(refracted);
+      renderer.compile(part, camera, scene);
+      renderer.setRenderTarget(null);
+    }
+    await pause();
+    if (destroyed) break;
+  }
+  refracted.dispose();
+  await renderer.compileAsync(scene, camera);
+  if (destroyed) throw new Error("destroyed");
+
+  ready = true;
   return {
     setProgress(p) {
-      target = still ? 1 : clamp01(p);
+      shown = clamp01(p);
       wake();
     },
     setLayout(next) {
       resize(next);
-      if (still && warmed) render(performance.now());
-      else wake();
+      wake();
     },
     setPointer(x, y) {
       pointer.x = x;
@@ -1236,21 +1190,20 @@ export function mountDrinkScene(
         frame = 0;
       }
     },
-    destroy() {
-      destroyed = true;
-      cancelAnimationFrame(frame);
-      frame = 0;
-      canvas.removeEventListener("webglcontextlost", onContextLost);
-      scene.traverse((obj) => {
-        if (obj instanceof Mesh) {
-          obj.geometry.dispose();
-          (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach((mat) =>
-            mat.dispose(),
-          );
-        }
-      });
-      disposables.forEach((d) => d.dispose());
-      renderer.dispose();
+    snapshot(p, ratio) {
+      renderer.setPixelRatio(ratio);
+      renderer.setSize(layout.width, layout.height, false);
+      time.value = 0;
+      const azimuth = apply(p, 0);
+      renderer.render(scene, camera);
+      const image = canvas.toDataURL("image/png");
+      projectAnchors(azimuth);
+      renderer.setPixelRatio(pixelRatio);
+      renderer.setSize(layout.width, layout.height, false);
+      shown = p;
+      return { image, anchors: { ...anchors } };
     },
+    bakeEnvironment: () => bakeStudioEnvironment(renderer),
+    destroy,
   };
 }
