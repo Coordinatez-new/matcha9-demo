@@ -72,6 +72,26 @@
     }
   }
 
+  /* The "scroll to build it" cue under the home page's drink: a line drawing downwards. */
+  @keyframes scroll-cue {
+    0% {
+      transform: scaleY(0);
+      transform-origin: top;
+    }
+    45% {
+      transform: scaleY(1);
+      transform-origin: top;
+    }
+    55% {
+      transform: scaleY(1);
+      transform-origin: bottom;
+    }
+    100% {
+      transform: scaleY(0);
+      transform-origin: bottom;
+    }
+  }
+
   /* A hanko pressed onto paper: comes down, squashes a touch, settles slightly askew. */
   @keyframes stamp {
     0% {

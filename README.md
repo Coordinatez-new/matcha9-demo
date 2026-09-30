@@ -21,19 +21,21 @@ Both builds render the same screens. Route files ending in `.server.tsx` belong 
 
 ### For guests
 
-| Route           | Page                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`             | Home: hero, the standard, menu carousel, wellness blends, the ritual, founder story, Matcha Club, visit, Instagram                    |
-| `/menu`         | Every drink on the menu, with category filters and a one-tap **+** to add to the bag                                                  |
-| `/menu/[drink]` | Photos, price, what's in the glass, **options** (e.g. Serve: Iced / Hot), quantity and **Add to bag**                                 |
-| `/checkout`     | Pickup time (as soon as possible, or a scheduled slot), name and phone, notes; pay at the counter                                     |
-| `/order/[id]`   | The guest's order page: live status (received → whisking → ready → picked up), pickup time and place. The preview uses `/order/?id=…` |
-| `/story`        | The founder's letter from the brand-story card, in full, with a timeline                                                              |
-| `/matcha`       | Quality standards, the way of tea (和敬清寂), "About matcha" FAQ, the tools of the ritual, the wellness blends                        |
-| `/community`    | The Matcha Club: past events and an Instagram gallery                                                                                 |
-| `/visit`        | Address, hours, phone, map and good-to-know answers                                                                                   |
+| Route           | Page                                                                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`             | Home: the signature drink built in 3D as you scroll, welcome, the standard, menu carousel, wellness blends, the ritual, founder story, Matcha Club, visit, Instagram |
+| `/menu`         | Every drink on the menu, with category filters and a one-tap **+** to add to the bag                                                                                 |
+| `/menu/[drink]` | Photos, price, what's in the glass, **options** (e.g. Serve: Iced / Hot), quantity and **Add to bag**                                                                |
+| `/checkout`     | Pickup time (as soon as possible, or a scheduled slot), name and phone, notes; pay at the counter                                                                    |
+| `/order/[id]`   | The guest's order page: live status (received → whisking → ready → picked up), pickup time and place. The preview uses `/order/?id=…`                                |
+| `/story`        | The founder's letter from the brand-story card, in full, with a timeline                                                                                             |
+| `/matcha`       | Quality standards, the way of tea (和敬清寂), "About matcha" FAQ, the tools of the ritual, the wellness blends                                                       |
+| `/community`    | The Matcha Club: past events and an Instagram gallery                                                                                                                |
+| `/visit`        | Address, hours, phone, map and good-to-know answers                                                                                                                  |
 
 The header keeps to **Menu**, **Visit** and **Order pickup**. That button opens the bag, a slide-over with the order, pickup status ("Open now · ready in about 10 minutes" or "Closed right now. Order ahead for tomorrow at 9 am") and checkout. Delivery goes through the Toast ordering page, linked from the bag.
+
+**The home page opens on the Pistachio Drip, built in 3D as you scroll** (Three.js), under the header. The section holds still for a few screens of scrolling while the drink comes together in a fluted glass on a stone coaster: ice drops in, matcha pours from a katakuchi, milk follows and marbles into it, pistachio cream runs down the walls, a crown of foam goes on and roasted pistachio lands on top. Then the camera turns, a ring draws around the glass and each layer is named. A step rail (氷, 抹茶, ミルク…) follows along, and each step can be clicked to jump to it. The glass sits on the page's own cream, with soft leaf shadows (komorebi) on the wall. The drink's name, copy, price and stock come from the menu, so **Add to bag** works as everywhere else. Guests who prefer reduced motion see the finished drink without the pinned scroll; browsers without WebGL see its photo. The scene only draws frames while something moves, compiles its shaders before it appears and lowers its resolution on slow machines. The code is in `src/components/home/drink-build/` (the build's timing is in `timeline.ts`).
 
 On computers with a mouse, the pointer becomes a small **3D bamboo matcha whisk** (Three.js). It trails the pointer on a spring, leans into the direction of travel, and whisks when it passes over a drink. A dot marks the exact click point. Touch screens, visitors who prefer reduced motion and browsers without WebGL keep their normal cursor.
 
@@ -71,7 +73,7 @@ Payment is taken at the counter. Online card payment would come from the Toast i
 - **Postgres**, through `pg` when `DATABASE_URL` is set, or an embedded [PGlite](https://pglite.dev) database in `.data/` when it isn't. Plain SQL with a small migration runner; the starting menu loads on first run
 - Photos uploaded in the dashboard are resized with `sharp`, stored in the database and served from `/media/…`
 - Dashboard sign-in: owner email and password from the environment, sessions stored hashed in the database (HttpOnly cookie)
-- Validation with Zod, shared by the server and the preview (`src/lib/forms.ts`); Tailwind CSS v4 (design tokens in `src/app/globals.css`); Three.js for the cursor
+- Validation with Zod, shared by the server and the preview (`src/lib/forms.ts`); Tailwind CSS v4 (design tokens in `src/app/globals.css`); Three.js for the home page's drink and the cursor
 - ESLint, Prettier, GitHub Actions: CI for the site (lint, typecheck, build) and the Pages deploy for the preview
 
 ## Getting started
@@ -126,7 +128,8 @@ src/
     admin/               dashboard UI; admin/views/ holds the dashboard pages as views
     cursor/              the 3D whisk cursor
     order/               bag store, bag drawer, add-to-bag, checkout form, pickup button, status
-    home/ layout/ menu/ ui/ seo/
+    home/                home page sections; home/drink-build/ is the 3D drink the page opens on
+    layout/ menu/ ui/ seo/
   content/               the starting menu, brand story, matcha FAQ, community events
   demo/                  the preview's browser store, its versions of the actions, page wrappers
   lib/                   shared types and rules: menu and pricing, pickup times, forms, orders
@@ -144,4 +147,4 @@ All content is the client's own: the printed brand-story card and menu, the live
 - `public/images/drinks/bar/`: the client's real bar photos, cropped (and in three cases retouched) to remove the name labels from their Instagram stories
 - `src/assets/`: brand, place, craft and community photos, the logo cut out to transparent WebP, and the Japanese font subset (SIL Open Font License, see `src/assets/fonts/OFL.txt`)
 
-**Still to confirm with the client:** opening hours (the site starts with "Daily, 9 am – 2 pm" from their draft site; editable in Settings), drink options beyond the published "hot or iced · milk or water" (editable per drink), the grams of matcha per drink (their pages say both 3 g and 4 g, so no figure is shown), and Toast API access for sending orders to the POS.
+**Still to confirm with the client:** opening hours (the site starts with "Daily, 9 am – 2 pm" from their draft site; editable in Settings), drink options beyond the published "hot or iced · milk or water" (editable per drink), the grams of matcha per drink (their pages say both 3 g and 4 g, so no figure is shown), the order the Pistachio Drip is built in on the home page (ice, matcha, milk, pistachio cream, foam, roasted pistachio, taken from the bar's photos), and Toast API access for sending orders to the POS.
