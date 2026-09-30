@@ -1,9 +1,10 @@
+import type { ReactNode } from "react";
 import { logoutAction } from "@/app/admin/actions";
 import { DashboardShell } from "@/components/admin/DashboardShell";
 import { requireAdmin } from "@/server/auth";
 import { orderStats } from "@/server/orders";
 
-export default async function DashboardLayout({ children }: LayoutProps<"/admin">) {
+export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const admin = await requireAdmin();
   const stats = await orderStats();
   return (

@@ -2,7 +2,10 @@ import type { NextRequest } from "next/server";
 import { getMediaFile } from "@/server/media";
 
 /** Photos uploaded from the dashboard. IDs never change content, so they cache forever. */
-export async function GET(_request: NextRequest, ctx: RouteContext<"/media/[file]">) {
+// Typed here: the route type helpers (RouteContext) aren't generated for the preview build.
+type Context = { params: Promise<{ file: string }> };
+
+export async function GET(_request: NextRequest, ctx: Context) {
   const { file } = await ctx.params;
   const media = await getMediaFile(file.replace(/\.webp$/, ""));
   if (!media) return new Response("Not found", { status: 404 });
